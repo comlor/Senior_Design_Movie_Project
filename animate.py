@@ -4,17 +4,16 @@
 import bpy
 import os
 
-
-#render the full length video
-#
-#
-#
-
+# Directory where rendered stills are located
 in_dir = "/Users/chrisomlor/MovieDemo/temp"
+
+# Get list of frames from directory
 lst = os.listdir(in_dir)
 
+# Set output directory to save final video
 out_dir = "/Users/chrisomlor/MovieDemo/"
 
+# Define resolution for video
 resx = 720;  # 1920
 resy = 480;  # 1080
 bpy.data.scenes["Scene"].render.resolution_x = resx
@@ -29,6 +28,7 @@ for item in lst:
     if fileExtension == ".png":
         candidates.append(item)
     c = + 1
+
 
 file = [{"name": i} for i in candidates]
 n = len(file)

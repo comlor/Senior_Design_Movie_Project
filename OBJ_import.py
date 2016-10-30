@@ -16,7 +16,7 @@ bpy.ops.wm.save_as_mainfile(filepath='test.blend', relative_remap=True, copy=Tru
 # Import the OBJ file specified in command into blender
 bpy.ops.import_scene.obj(filepath=sys.argv[-1])
 
-# Prints name of all objects on scene in terminal
+# Prints name of all objects on scene in terminal -- Delete after development complete
 #obs = bpy.data.objects
 #for ob in obs:
 #    print(ob.name)
