@@ -1,12 +1,12 @@
 # Render images
-# blender test.blend --background -t 0 --python /Users/chrisomlor/PycharmProjects/objload/render.py
+# blender my_test.blend --background -t 0 --python /Users/chrisomlor/PycharmProjects/objload/render.py
 
 import bpy
 from math import radians
 import blend_render_info
 
 # Path to blend file created by OBJ_import.py
-filepath = '/Users/chrisomlor/test.blend'
+filepath = 'my_test.blend'
 
 # Read .blend file header to get frame data
 data = blend_render_info.read_blend_rend_chunk(filepath)
@@ -24,13 +24,13 @@ bpy.context.scene.camera = bpy.data.objects['Camera']
 scene = bpy.context.scene
 
 # Directory path to store rendered frames
-fp = '/Users/chrisomlor/MovieDemo/temp/'
+fp = './temp/'
 
 # Define render file format
 scene.render.image_settings.file_format = 'PNG' # set output format to .png
 
 # Render each frame individually
-for frame_nr in range(10):#(frame_count):
+for frame_nr in range(frame_count):
 
     # Select the current frame
     scene.frame_set(frame_nr)

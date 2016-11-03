@@ -5,13 +5,13 @@ import bpy
 import os
 
 # Directory where rendered stills are located
-in_dir = "/Users/chrisomlor/MovieDemo/temp"
+in_dir = "./temp"
 
 # Get list of frames from directory
 lst = os.listdir(in_dir)
 
 # Set output directory to save final video
-out_dir = "/Users/chrisomlor/MovieDemo/"
+out_dir = "./"
 
 # Define resolution for video
 resx = 720;  # 1920
