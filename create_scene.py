@@ -173,3 +173,14 @@ class BuildScene:
             scene.render.resolution_percentage = self.path.res_percent
             scene.render.use_border = False
             scene.render.use_raytrace = False
+        bpy.data.scenes["Scene"].render.use_antialiasing = False
+        bpy.data.scenes["Scene"].render.use_shadows = False
+        bpy.data.scenes["Scene"].render.use_sss = False
+        bpy.data.scenes["Scene"].render.tile_x = 128
+        bpy.data.scenes["Scene"].render.tile_y = 128
+        bpy.data.scenes["Scene"].render.use_simplify = True
+        bpy.data.scenes["Scene"].render.simplify_subdivision = 2
+        bpy.data.scenes["Scene"].render.simplify_subdivision_render = 2
+        bpy.data.lamps["Sun"].shadow_method = "RAY_SHADOW"
+        bpy.data.lamps["Sun"].shadow_soft_size = 1.000
+        bpy.data.lamps["Sun"].shadow_ray_samples = 1
