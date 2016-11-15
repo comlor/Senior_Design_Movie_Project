@@ -67,9 +67,9 @@ class BuildScene:
         lamp_object.rotation_euler = (1.6, -0.82, 0.18)
 
         # Set lighting options so textures can be rendered and visible
-        lmp = bpy.data.lamps[lamp_data.name]
-        lmp.energy = self.path.energy
-        lmp.use_specular = False
+        #lmp = bpy.data.lamps[lamp_data.name]
+        #lmp.energy = self.path.energy
+        #lmp.use_specular = False
 
     def create_camera(self):
         # Create a new camera object
@@ -166,10 +166,24 @@ class BuildScene:
         bpy.ops.object.parent_set(type='FOLLOW')  # follow path
 
     def set_render_options(self):
-        # Set scene render data
-        for scene in bpy.data.scenes:
-            scene.render.resolution_x = self.path.res_x
-            scene.render.resolution_y = self.path.res_y
-            scene.render.resolution_percentage = self.path.res_percent
-            scene.render.use_border = False
-            scene.render.use_raytrace = False
+        # Set Rendering Options
+        bpy.data.scenes["Scene"].render.resolution_x = self.path.render_res_x
+        bpy.data.scenes["Scene"].render.resolution_y = self.path.render_res_y
+        bpy.data.scenes["Scene"].render.resolution_percentage = self.path.render_res_percent
+        bpy.data.scenes["Scene"].render.use_border = self.path.use_border
+        bpy.data.scenes["Scene"].render.use_raytrace = self.path.use_ray_trace
+        bpy.data.scenes["Scene"].render.use_antialiasing = self.path.use_anti_aliasing
+        bpy.data.scenes["Scene"].render.use_shadows = self.path.use_shadows
+        bpy.data.scenes["Scene"].render.use_sss = self.path.use_sss
+        bpy.data.scenes["Scene"].render.tile_x = self.path.render_tile_x
+        bpy.data.scenes["Scene"].render.tile_y = self.path.render_tile_y
+        bpy.data.scenes["Scene"].render.use_simplify = self.path.use_simplify
+        bpy.data.scenes["Scene"].render.simplify_subdivision = self.path.simplify_subdivision
+        bpy.data.scenes["Scene"].render.simplify_subdivision_render = self.path.simplify_subdivision_render
+
+        # Set Lighting Options
+        bpy.data.lamps["Sun"].shadow_method = self.path.shadow_method
+        bpy.data.lamps["Sun"].shadow_soft_size = self.path.shadow_soft_size
+        bpy.data.lamps["Sun"].shadow_ray_samples = self.path.shadow_ray_samples
+        bpy.data.lamps["Sun"].use_specular = self.path.use_specular
+        bpy.data.lamps["Sun"].energy = self.path.energy

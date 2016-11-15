@@ -15,7 +15,7 @@ class RenderStills:
 
     def render_stills(self):
         # Set the camera object for the scene
-        bpy.context.scene.camera = bpy.data.objects['My Camera']
+        bpy.context.scene.camera = bpy.data.objects['MyCamera']
 
         # Get the scene context to render
         scene = bpy.context.scene
@@ -38,4 +38,4 @@ class RenderStills:
             bpy.ops.render.render(write_still=True)
 
         # Reset file path for rendering
-        scene.render.filepath = fp
+        #scene.render.filepath = fp
