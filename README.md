@@ -13,7 +13,8 @@ CSULA Senior Design Project for JPL Movie Project
 
 <p>To use this version</p>
 <p>All blender files must be stored in the appropriate directory.</p>
-
+<p>Blender Pathing documentation</p>
+<p>https://www.blender.org/manual/getting_started/installing/configuration/directories.html</p>
 <p>Windows</p>
 <p>C:\Documents and Settings\All Users\AppData\Roaming\Blender Foundation\Blender\2.78\scripts\modules\</p>
 
