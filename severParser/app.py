@@ -1,7 +1,21 @@
 from bottle import get, post, run, route, request, response
 
 import spiceypy as spy
+import os
 import  json
+
+
+def spkFiles():
+    '''
+    Loads the kernel that are needed for dertermining the calculations
+
+    param: NONE
+    return: none
+    '''
+    cwd = os.getcwd()
+    spicedir = cwd + "\\spice"
+    SPK = [spicedir+"\\de405.bsp", spicedir+"\\pck00008.tpc.txt"]
+    spy.furnsh(SPK)
 
 @route('/spiceoutput')
 def spiceoutput():
@@ -17,7 +31,7 @@ def spiceoutput():
     OBSERVER = "Mars"
     TARGET = "Sun"
     spy.furnsh(SPK)
-    return str(spy.spkezr(TARGET, ET0, FRAME, ABCORR, OBSERVER))
+    return json.dumps(spy.spkezr(TARGET, ET0, FRAME, ABCORR, OBSERVER))
 
 @route('/centermarstosun')
 def center_marsToSun():
@@ -38,12 +52,12 @@ def center_marsToSun():
 
     list = spy.spkezr(Observer, Et0, Frame, Abcorr, Target)
     postionList = (list[0][0], list[0][1], list[0][2], list[1])
-    return str(postionList)
+    return json.dumps(postionList)
 
 
 # center_marsToSun()
 
-@get('/sphertocar')
+@get('/sphertocart')
 def spherToCart():
     long = request.params.long
     lat = request.params.lat
@@ -56,7 +70,7 @@ def spherToCart():
     '''
     spkFiles()
 
-    input_state = [long, lat, alt, 1.1626723557311027, 23.918409779910249, 10.939171726577502]
+    input_state = [float(long), float(lat), float(alt), 1.1626723557311027, 23.918409779910249, 10.939171726577502]
     input_coord_sys = 'PLANETOGRAPHIC'
     output_coord_sys = 'RECTANGULAR'
     body = 'Mars'
@@ -64,7 +78,7 @@ def spherToCart():
     tempList = spy.xfmsta(input_state, input_coord_sys, output_coord_sys, body)
 
     finalList = tempList[0], tempList[1], tempList[2]
-    return str(finalList)
+    return json.dumps(finalList)
 
 
 @get('/carttospher')
@@ -80,7 +94,7 @@ def cartToSpher():
     '''
     spkFiles()
 
-    input_state = [x, y, z, 1.1626723557311027, 23.918409779910249, 10.939171726577502]
+    input_state = [float(x), float(y), float(z), 1.1626723557311027, 23.918409779910249, 10.939171726577502]
     input_coord_sys = 'RECTANGULAR'
     output_coord_sys = 'PLANETOGRAPHIC'
     body = 'Mars'
@@ -88,7 +102,7 @@ def cartToSpher():
     tempList = spy.xfmsta(input_state, input_coord_sys, output_coord_sys, body)
 
     finalList = tempList[0], tempList[1], tempList[2]
-    return str(finalList)
+    return json.dumps(finalList)
 
 
 # cartToSpher(3.44619000e+03,0,0)
@@ -113,13 +127,13 @@ def marsToSun():
     outref = 'J2000'
     refloc = 'TARGET'
     Abcorr = "NONE"
-    obspos = (x, y, z)
+    obspos = (float(x), float(y), float(z))
     obsctr = 'Mars'
     obsref = 'J2000'
 
     list = spy.spkcpo(Target, Et0, outref, refloc, Abcorr, obspos, obsctr, obsref)
     postionList = (list[0][0], list[0][1], list[0][2], list[1])
-    return str(postionList)
+    return json.dumps(postionList)
 
 
 # marsToSun(3446.1900000000001, -0.0, 0.0)
@@ -143,8 +157,8 @@ def center_earthToSun():
 
     list = spy.spkezr(Observer, Et0, Frame, Abcorr, Target)
     postionList = (list[0][0], list[0][1], list[0][2], list[1])
-    return str(postionList)+"\n"+str(list)
-
+    return json.dumps(postionList)
+ 
 
 # center_earthToSun()
 
@@ -161,7 +175,7 @@ def spherToCartEarth():
     '''
     spkFiles()
 
-    input_state = [long, lat, alt, 1.1626723557311027, 23.918409779910249, 10.939171726577502]
+    input_state = [float(long), float(lat), float(alt), 1.1626723557311027, 23.918409779910249, 10.939171726577502]
     input_coord_sys = 'PLANETOGRAPHIC'
     output_coord_sys = 'RECTANGULAR'
     body = 'Earth'
@@ -169,8 +183,9 @@ def spherToCartEarth():
     tempList = spy.xfmsta(input_state, input_coord_sys, output_coord_sys, body)
 
     finalList = tempList[0], tempList[1], tempList[2]
-    return str(finalList)
+    return json.dumps(finalList)
 
+''''
 @route('/earthtosun')
 def earthToSun():
     spkFiles()
@@ -188,5 +203,6 @@ def earthToSun():
     list = spy.spkcpo(Target, Et0, outref, refloc, Abcorr, obspos, obsctr, obsref)
     postionList = (list[0][0], list[0][1], list[0][2], list[1])
     return str(postionList)
+'''
 
 run(host='localhost', port=8080, debug=True)
