@@ -2,9 +2,16 @@ from bottle import get, post, run, route, request, response
 
 import spiceypy as spy
 import os
-import  json
+import json
 
-
+@route ('/requestjson', method='POST')
+def requestjson(UpdatedData=None):
+    response.content_type = 'application/json'
+    sender = request.json['sender']
+    receiver = request.json['receiver']
+    message = request.json['message']
+    print(sender+"\n"+receiver+"\n"+message)
+ 
 def spkFiles():
     '''
     Loads the kernel that are needed for dertermining the calculations
@@ -158,7 +165,7 @@ def center_earthToSun():
     list = spy.spkezr(Observer, Et0, Frame, Abcorr, Target)
     postionList = (list[0][0], list[0][1], list[0][2], list[1])
     return json.dumps(postionList)
- 
+
 
 # center_earthToSun()
 
