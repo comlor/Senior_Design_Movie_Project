@@ -1,21 +1,23 @@
 from jpl_config import FilePaths
 import bpy
+import bmesh
+from bpy import context as C
 
 
 class BuildScene:
 
-    def __init__(self, end_frame, points):
-        self.path = FilePaths('/')
+    def __init__(self, points, path):
+        self.path = path
 
         # Get a object of the current scene
         self.scene = bpy.context.scene
 
         num_points = len(points)
         print("Number of points: " + str(num_points))
-        self.eval_time = points[num_points - 1][3]
+        self.eval_time = points[num_points - 1][0]
 
-        self.points = self.inter(points);
-        self.end_frame = len(self.points)
+        self.points = self.inter(points)
+        self.path.end_frame = len(self.points)
         self.set_end_frame()
 
     def inter(self, points):
@@ -23,21 +25,21 @@ class BuildScene:
         num_points = len(points)
 
         for pt in range(num_points):
-            result.append([points[pt][0], points[pt][1], points[pt][2]])
+            result.append([points[pt][1], points[pt][2], points[pt][3]])
             if pt + 1 < num_points:
-                dif_x = points[pt + 1][0] - points[pt][0]
-                dif_y = points[pt + 1][1] - points[pt][1]
-                dif_z = points[pt + 1][2] - points[pt][2]
+                dif_x = points[pt + 1][1] - points[pt][1]
+                dif_y = points[pt + 1][2] - points[pt][2]
+                dif_z = points[pt + 1][3] - points[pt][3]
                 print("dif_x: " + str(dif_x) + "   dif_y: " + str(dif_y) + "   dif_z: " + str(dif_z))
-                offset = (points[pt + 1][3] - points[pt][3]) * 24
+                offset = (points[pt + 1][0] - points[pt][0]) * 24
                 print("offset: " + str(offset))
                 delta_x = dif_x / offset
                 delta_y = dif_y / offset
                 delta_z = dif_z / offset
                 print("delta_x: " + str(delta_x) + "   delta_y: " + str(delta_y) + "   delta_z: " + str(delta_z))
-                new_x = points[pt][0]
-                new_y = points[pt][1]
-                new_z = points[pt][2]
+                new_x = points[pt][1]
+                new_y = points[pt][2]
+                new_z = points[pt][3]
 
                 for i in range(offset):
                     new_x += delta_x
@@ -47,7 +49,7 @@ class BuildScene:
         return result
 
     def set_end_frame(self):
-        bpy.data.scenes["Scene"].frame_end = self.end_frame
+        bpy.data.scenes["Scene"].frame_end = self.path.end_frame
         bpy.data.scenes["Scene"].frame_step = 1.0
 
     def create_lamp(self):
@@ -67,9 +69,9 @@ class BuildScene:
         lamp_object.rotation_euler = (1.6, -0.82, 0.18)
 
         # Set lighting options so textures can be rendered and visible
-        lmp = bpy.data.lamps[lamp_data.name]
-        lmp.energy = self.path.energy
-        lmp.use_specular = False
+        #lmp = bpy.data.lamps[lamp_data.name]
+        #lmp.energy = self.path.energy
+        #lmp.use_specular = False
 
     def create_camera(self):
         # Create a new camera object
@@ -107,7 +109,7 @@ class BuildScene:
 
         # map coords to spline
         polyline = curve_data.splines.new('NURBS')
-        polyline.points.add(self.end_frame)
+        polyline.points.add(self.path.end_frame)
 
         num = len(self.points)
         print("size; " + str(num))
@@ -165,22 +167,55 @@ class BuildScene:
         bpy.context.scene.objects.active = path
         bpy.ops.object.parent_set(type='FOLLOW')  # follow path
 
+
+    def new_reducer(self):
+        myobject = bpy.data.objects['theMartianColor']
+        myobject.select = True
+
+        bpy.context.scene.objects.active = myobject
+
+        me = bpy.context.object.data
+
+        bm = bmesh.new()
+        bm.from_mesh(me)
+
+        location = C.object.delta_location
+        dimension = C.object.dimensions
+
+        for i in range(int(location[0]), int(dimension[0]), int(dimension[0] / 3)):
+            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(i, 0, 0),
+                                         plane_no=(1, 0, 0))
+            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
+
+        for i in range(int(location[1]), int(dimension[1]), int(dimension[1] / 3)):
+            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, i, 0),
+                                         plane_no=(0, 1, 0))
+            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
+
+        bm.to_mesh(me)
+        bm.free()
+        myobject.select = False
+
+
     def set_render_options(self):
-        # Set scene render data
-        for scene in bpy.data.scenes:
-            scene.render.resolution_x = self.path.res_x
-            scene.render.resolution_y = self.path.res_y
-            scene.render.resolution_percentage = self.path.res_percent
-            scene.render.use_border = False
-            scene.render.use_raytrace = False
-        bpy.data.scenes["Scene"].render.use_antialiasing = False
-        bpy.data.scenes["Scene"].render.use_shadows = False
-        bpy.data.scenes["Scene"].render.use_sss = False
-        bpy.data.scenes["Scene"].render.tile_x = 128
-        bpy.data.scenes["Scene"].render.tile_y = 128
-        bpy.data.scenes["Scene"].render.use_simplify = True
-        bpy.data.scenes["Scene"].render.simplify_subdivision = 2
-        bpy.data.scenes["Scene"].render.simplify_subdivision_render = 2
-        bpy.data.lamps["Sun"].shadow_method = "RAY_SHADOW"
-        bpy.data.lamps["Sun"].shadow_soft_size = 1.000
-        bpy.data.lamps["Sun"].shadow_ray_samples = 1
+        # Set Rendering Options
+        bpy.data.scenes["Scene"].render.resolution_x = self.path.render_res_x
+        bpy.data.scenes["Scene"].render.resolution_y = self.path.render_res_y
+        bpy.data.scenes["Scene"].render.resolution_percentage = self.path.render_res_percent
+        bpy.data.scenes["Scene"].render.use_border = self.path.use_border
+        bpy.data.scenes["Scene"].render.use_raytrace = self.path.use_ray_trace
+        bpy.data.scenes["Scene"].render.use_antialiasing = self.path.use_anti_aliasing
+        bpy.data.scenes["Scene"].render.use_shadows = self.path.use_shadows
+        bpy.data.scenes["Scene"].render.use_sss = self.path.use_sss
+        bpy.data.scenes["Scene"].render.tile_x = self.path.render_tile_x
+        bpy.data.scenes["Scene"].render.tile_y = self.path.render_tile_y
+        bpy.data.scenes["Scene"].render.use_simplify = self.path.use_simplify
+        bpy.data.scenes["Scene"].render.simplify_subdivision = self.path.simplify_subdivision
+        bpy.data.scenes["Scene"].render.simplify_subdivision_render = self.path.simplify_subdivision_render
+
+        # Set Lighting Options
+        bpy.data.lamps["Sun"].shadow_method = self.path.shadow_method
+        bpy.data.lamps["Sun"].shadow_soft_size = self.path.shadow_soft_size
+        bpy.data.lamps["Sun"].shadow_ray_samples = self.path.shadow_ray_samples
+        bpy.data.lamps["Sun"].use_specular = self.path.use_specular
+        bpy.data.lamps["Sun"].energy = self.path.energy
