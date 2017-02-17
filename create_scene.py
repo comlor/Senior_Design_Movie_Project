@@ -1,21 +1,23 @@
 from jpl_config import FilePaths
 import bpy
+import bmesh
+from bpy import context as C
 
 
 class BuildScene:
 
-    def __init__(self, end_frame, points):
-        self.path = FilePaths('/')
+    def __init__(self, points, path):
+        self.path = path
 
         # Get a object of the current scene
         self.scene = bpy.context.scene
 
         num_points = len(points)
         print("Number of points: " + str(num_points))
-        self.eval_time = points[num_points - 1][3]
+        self.eval_time = points[num_points - 1][0]
 
-        self.points = self.inter(points);
-        self.end_frame = len(self.points)
+        self.points = self.inter(points)
+        self.path.end_frame = len(self.points)
         self.set_end_frame()
 
     def inter(self, points):
@@ -23,21 +25,21 @@ class BuildScene:
         num_points = len(points)
 
         for pt in range(num_points):
-            result.append([points[pt][0], points[pt][1], points[pt][2]])
+            result.append([points[pt][1], points[pt][2], points[pt][3]])
             if pt + 1 < num_points:
-                dif_x = points[pt + 1][0] - points[pt][0]
-                dif_y = points[pt + 1][1] - points[pt][1]
-                dif_z = points[pt + 1][2] - points[pt][2]
+                dif_x = points[pt + 1][1] - points[pt][1]
+                dif_y = points[pt + 1][2] - points[pt][2]
+                dif_z = points[pt + 1][3] - points[pt][3]
                 print("dif_x: " + str(dif_x) + "   dif_y: " + str(dif_y) + "   dif_z: " + str(dif_z))
-                offset = (points[pt + 1][3] - points[pt][3]) * 24
+                offset = (points[pt + 1][0] - points[pt][0]) * 24
                 print("offset: " + str(offset))
                 delta_x = dif_x / offset
                 delta_y = dif_y / offset
                 delta_z = dif_z / offset
                 print("delta_x: " + str(delta_x) + "   delta_y: " + str(delta_y) + "   delta_z: " + str(delta_z))
-                new_x = points[pt][0]
-                new_y = points[pt][1]
-                new_z = points[pt][2]
+                new_x = points[pt][1]
+                new_y = points[pt][2]
+                new_z = points[pt][3]
 
                 for i in range(offset):
                     new_x += delta_x
@@ -47,7 +49,7 @@ class BuildScene:
         return result
 
     def set_end_frame(self):
-        bpy.data.scenes["Scene"].frame_end = self.end_frame
+        bpy.data.scenes["Scene"].frame_end = self.path.end_frame
         bpy.data.scenes["Scene"].frame_step = 1.0
 
     def create_lamp(self):
@@ -107,7 +109,7 @@ class BuildScene:
 
         # map coords to spline
         polyline = curve_data.splines.new('NURBS')
-        polyline.points.add(self.end_frame)
+        polyline.points.add(self.path.end_frame)
 
         num = len(self.points)
         print("size; " + str(num))
@@ -164,6 +166,36 @@ class BuildScene:
         # Make objects active and set camera to follow camera path.
         bpy.context.scene.objects.active = path
         bpy.ops.object.parent_set(type='FOLLOW')  # follow path
+
+
+    def new_reducer(self):
+        myobject = bpy.data.objects['theMartianColor']
+        myobject.select = True
+
+        bpy.context.scene.objects.active = myobject
+
+        me = bpy.context.object.data
+
+        bm = bmesh.new()
+        bm.from_mesh(me)
+
+        location = C.object.delta_location
+        dimension = C.object.dimensions
+
+        for i in range(int(location[0]), int(dimension[0]), int(dimension[0] / 3)):
+            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(i, 0, 0),
+                                         plane_no=(1, 0, 0))
+            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
+
+        for i in range(int(location[1]), int(dimension[1]), int(dimension[1] / 3)):
+            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, i, 0),
+                                         plane_no=(0, 1, 0))
+            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
+
+        bm.to_mesh(me)
+        bm.free()
+        myobject.select = False
+
 
     def set_render_options(self):
         # Set Rendering Options
