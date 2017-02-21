@@ -1,22 +1,32 @@
 import os
-import bpy
+#import bpy
 
 class FilePaths:
 
-    def __init__(self, file_name):
-        # Absolute File Paths to working directories
-        self.abs_temp_dir = "/home/comlor/MovieDemo/temp/"
-        self.abs_output_dir = "/home/comlor/MovieDemo/"
-        self.abs_obj_dir = "/home/comlor/MovieDemo/"
+    def __init__(self, file_name, blend_file_name):
+        # Absolute File Paths to working directories in project
+        self.abs_project_dir = "/home/chrisomlor/MovieDemo"
+        self.abs_temp_dir = "/home/chrisomlor/MovieDemo/temp/"
+        self.abs_output_dir = "/home/chrisomlor/MovieDemo/"
+        self.abs_obj_dir = "/home/chrisomlor/MovieDemo/Assets/"
+        self.CZML_loc = "/home/chrisomlor/MovieDemo/Assets/"
+
+        # File names for files in project
+        self.img_filename = file_name
+        self.CZML_filename = ""
 
         # Variable to hold absolute file path to Files used by program.  OBJ file exists, blend file is created
-        # by this program`\#        self.obj_file = os.path.join(self.abs_obj_dir, file_name) # Works to load the obj file
-        self.blend_file = ''
+        # by this program`\#
+        self.obj_file = os.path.join(self.abs_obj_dir, file_name)
+        self.img_file = os.path.join(self.abs_obj_dir, self.img_filename)
+        self.blend_file = blend_file_name
+
 
         # CAMERA CONFIGURATION OPTIONS
         self.camera_preset = 'Nikon D3100'
 
         # RENDER CONFIG
+        self.end_frame = 100
         self.render_res_x = 1280
         self.render_res_y = 720
         self.render_res_percent = 50
@@ -45,7 +55,7 @@ class FilePaths:
         self.blend_file = path
 
     def get_blend_file(self):
-        return self.blend_file
+        return os.path.join(self.abs_output_dir, self.blend_file)
 
     def obj_file(self):
         return self.obj_file
