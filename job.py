@@ -1,11 +1,9 @@
-from jpl_config import FilePaths
-from create_blend import Import_OBJ
+from jpl_conf import FilePaths
+from jpl_conf import Blender_Config_Options
+from create_blend import Importer
 from create_scene import BuildScene
-from render_scene import RenderStills
-from animate_scene import AnimateScene
-from CZMLParser import CZMLParser
 from osgeo import gdal, osr
-import os
+from CzmlParser import CZML_Parser
 
 # Profiling imports to test timing
 import time
@@ -19,6 +17,38 @@ def timing(f):
         print('%s function took %0.3f ms' % (f.__name__, (time2 - time1)*1000.0))
     return wrap
 
+def get_meta_data(path):
+    bag = gdal.Open(path.get_import_file_name())  # replace it with your file
+    # raster is projected
+    bag_gtrn = bag.GetGeoTransform()
+    bag_proj = bag.GetProjectionRef()
+    bag_srs = osr.SpatialReference(bag_proj)
+    geo_srs = bag_srs.CloneGeogCS()  # new srs obj to go from x,y -> φ,λ
+    transform = osr.CoordinateTransformation(bag_srs, geo_srs)
+
+    bag_bbox_cells = (
+        (0., 0.),
+        (0, bag.RasterYSize),
+        (bag.RasterXSize, bag.RasterYSize),
+        (bag.RasterXSize, 0),
+    )
+
+    geo_pts = []
+    pix_pts = []
+    xy_pts = []
+    for x, y in bag_bbox_cells:
+        x2 = bag_gtrn[0] + bag_gtrn[1] * x + bag_gtrn[2] * y
+        y2 = bag_gtrn[3] + bag_gtrn[4] * x + bag_gtrn[5] * y
+        geo_pt = transform.TransformPoint(x2, y2)[:2]
+        geo_pts.append(geo_pt)
+        pix_pts.append([x2, y2])
+        xy_pts.append([x, y])
+
+    #print("index 0: " + str(xy_pts))
+    #print("index 1: " + str(pix_pts))
+    #print("index 2: " + str(geo_pts))
+
+    return [xy_pts, pix_pts, geo_pts]
 
 @timing
 def do_import(in_obj):
@@ -26,66 +56,54 @@ def do_import(in_obj):
 
     # Importing Functions.
     # Supports IMG, Collada, and OBJ
-    in_obj.import_hirise_img()
+    #in_obj.import_hirise_img("BIN12-FAST")
+    in_obj.import_hirise_img("BIN6")
     #in_obj.import_collada()
     # in_obj.import_obj_file()
 
     in_obj.select_object()
     #in_obj.set_textured_view()
 
-
 @timing
 def do_create_scene(scene):
-    #scene.new_reducer()
-    scene.set_end_frame()
     scene.create_lamp()
     scene.create_camera()
     scene.create_camera_path()
-    #scene.create_key_frames()
     scene.bind_camera_path()
-    #scene.set_render_options()
+    scene.set_camera_orientation()
 
 
-@timing
-def do_render(render):
-    render.render_stills()
+def main(json_path=None):
+    # Testing data for camera positioning
+    points = [[0, 27.83998, 28.16131, 500.0000], [10, 27.9000, 28.0000, 1000.0000], [20, 27.99168, 27.85431, 750]]
+    cam = [[11.415, -10.087, -59.376, -111.546], [90.0, -25.0, -65.0, -100.0], [90.0, -25, -65, -100]]
 
+    json_file = json_path
+    json_parse = CZML_Parser(json_file)
 
-@timing
-def do_animate(animater):
-    animater.animate()
+    point, angle = json_parse.blenderCamera()
 
-def main():
-    #points = [[0, 150.000, -85.000, 100.000],
-    #          [10, 150.000, -85.000, 200.000,
-    #          [30, 225.000, -85.000, 225.000],
-    #          [45, 300.000, -85.000, 275.000]]
-    #points = [[0, 150.000, -85.000, 100.000], [10, 150.000, -85.000, 200.000]]
-    points = [[0, 150.000, -75.000, 100.000], [10, 150.000, 0.000, 100.000]]
+    print(points)
+    print(angle)
 
-    file_path = FilePaths('theMartianColor.obj')
     out_file = 'my_test.blend'
-    file_path.blend_file = out_file
+    in_file = 'my_image.IMG'
 
+    file_path = FilePaths(in_file, out_file)
+    blend_config = Blender_Config_Options()
 
-    #the_parser = CZMLParser(file_path.czml_loc)
-    #points = the_parser.blenderCamera()
-    #print(points)
+    meta_data = get_meta_data(file_path)
 
+    my_importer = Importer(file_path)
 
-    in_obj = Import_OBJ(file_path, out_file)
-    file_path.set_blend_file(os.path.join(file_path.abs_obj_dir, out_file))
-    do_import(in_obj)
-    in_obj.save_scene()
+    do_import(my_importer)
 
+    my_scene = BuildScene(blend_config, file_path, meta_data, [points, cam])
 
-    #scene = BuildScene(points, file_path)
-    #do_create_scene(scene)
-    #in_obj.save_scene()
-    #render = RenderStills(file_path)
-    #do_render(render)
-    #animater = AnimateScene(file_path)
-    #do_animate(animater)
+    do_create_scene(my_scene)
+
+    my_importer.save_scene()
+
 
 if __name__ == "__main__":
-    main()
+    main(json_path='/home/chrisomlor/MovieDemo/Assets/sample.json')
