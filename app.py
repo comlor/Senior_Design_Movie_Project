@@ -1,208 +1,118 @@
-from bottle import get, post, run, route, request, response
+from bottle import get, post, run, route, request, response, hook
 
 import spiceypy as spy
-import os
-import json
+import  json
 
-
-def spkFiles():
-    '''
-    Loads the kernel that are needed for dertermining the calculations
-
-    param: NONE
-    return: none
-    '''
-    cwd = os.getcwd()
-    spicedir = cwd + "\\spice"
-    SPK = [spicedir+"\\de405.bsp", spicedir+"\\pck00008.tpc.txt"]
-    spy.furnsh(SPK)
+@hook('after_request')
+def enable_cors():
+    response.headers['Access-Control-Allow-Origin'] = '*'
 
 @route('/spiceoutput')
-def spiceoutput():
-    print(spy.tkvrsn('TOOLKIT'))
-    # dir(spiceypy)
-    # help(spiceypy)
-    ABCORR = "NONE"
-    FRAME = "J2000"
-    #
-    SPK = "/home/comlor/MovieDemo/spice/de405.bsp"
-    # ET0 represents the date 2000 Jan 1 12:00:00 TDB.
-    ET0 = 0.0  #
-    OBSERVER = "Mars"
-    TARGET = "Sun"
-    spy.furnsh(SPK)
-    return json.dumps(spy.spkezr(TARGET, ET0, FRAME, ABCORR, OBSERVER))
+class Spice():
+    def __init__(self, lon, lat, alt, et, planet):
+        self.lon = float(lon)
+        self.lat = float(lat)
+        self.alt = float(alt)
+        self.et = et
+        self.planet = planet
 
-@route('/centermarstosun')
-def center_marsToSun():
-    '''
-    Finds the position of the sun from the center of mars.
-    Need the kernel that knows all the positions of the planets, satillites, ect
+    def spkFiles(self):
+        '''
+        Loads the kernel that are needed for dertermining the calculations
 
-    param: NONE
-    return: list (x,y,z) in km and light speed distance from target to observer
-    rtype: list
-    '''
-    Abcorr = "NONE"
-    Frame = "J2000"
-    spkFiles()
-    Et0 = 0.0
-    Observer = "Mars"
-    Target = "Sun"
+        param: NONE
+        return: none
+        '''
 
-    list = spy.spkezr(Observer, Et0, Frame, Abcorr, Target)
-    postionList = (list[0][0], list[0][1], list[0][2], list[1])
-    return json.dumps(postionList)
+        # Must put the path to these files
+        SPK = ["spice/de405.bsp"
+            , "spice/pck00008.tpc.txt"
+            , "spice/naif0012.txt"]
+        spy.furnsh(SPK)
 
+    def spherToCart(self, lon, lat, alt, velocity, planet):
+        '''
 
-# center_marsToSun()
+        :param lon:
+        :param lat:
+        :param alt:
+        :param velocity:
+        :param planet:
+        :return:
+        '''
 
-@get('/sphertocart')
-def spherToCart():
-    long = request.params.long
+        self.spkFiles()
+
+        input_state = [lon, lat, alt, velocity[0], velocity[1], velocity[2]]
+        input_coord_sys = 'PLANETOGRAPHIC'
+        output_corrd_sys = 'RECTANGULAR'
+
+        temp = spy.xfmsta(input_state, input_coord_sys, output_corrd_sys, planet)
+
+        list = temp[0], temp[1], temp[2]
+
+        return list
+
+    def sunData(self):
+        '''
+
+        :param lon:
+        :param lat:
+        :param alt:
+        :param et:
+        :param planet:
+        :return:
+        '''
+        frame = "J2000"
+        abcorr = "None"
+        target = "Sun"
+        refloc = 'TARGET'
+
+        # get the files required
+        self.spkFiles()
+
+        # gets correct time format
+        et0 = self.et
+        et1 = et0.replace('T', ' ')
+        et2 = et1.replace('Z', '')
+        et3 = spy.str2et(et2)
+
+        # print(et3)
+
+        # get the velocity of planet
+        templist = spy.spkezr(self.planet, et3, frame, abcorr, target)
+        velocity = templist[0][3], templist[0][4], templist[0][5]
+
+        # converts into x,y,z from lon,lat,alt
+        xyz = self.spherToCart(self.lon, self.lat, self.alt, velocity, self.planet)
+
+        temp0 = spy.spkcpo(target, et3, frame, refloc, abcorr, xyz, self.planet, frame)
+        sunPos = temp0[0][0], temp0[0][1], temp0[0][2]
+        return json.dumps(sunPos)
+
+@route('/SunData')
+def SunData():
+    lon = request.params.lon
     lat = request.params.lat
     alt = request.params.alt
-    '''
-    Changes spherical(long,lat,alt) to cartensian(x,y,z) in km
+    et = request.params.et
+    planet = request.params.planet
 
-    param: long, lat, alt type: float, float, float
-    return: x,y,z return type: 6-Element Array of floats
-    '''
-    spkFiles()
+    print(alt)
 
-    input_state = [float(long), float(lat), float(alt), 1.1626723557311027, 23.918409779910249, 10.939171726577502]
-    input_coord_sys = 'PLANETOGRAPHIC'
-    output_coord_sys = 'RECTANGULAR'
-    body = 'Mars'
-
-    tempList = spy.xfmsta(input_state, input_coord_sys, output_coord_sys, body)
-
-    finalList = tempList[0], tempList[1], tempList[2]
-    return json.dumps(finalList)
+    lon = str(lon)
+    lat = str(lat)
+    alt = str(alt)
+    lon = lon.replace('p','.')
+    lat = lat.replace('p', '.')
+    alt = alt.replace('p','.')
 
 
-@get('/carttospher')
-def cartToSpher():
-    x = request.params.x
-    y = request.params.y
-    z = request.params.z
-    '''
-    Changes cartensian(x,y,z) in km to spherical(long,lat,alt)
+    sun = Spice(lon,lat,alt,et,planet)
 
-    param: long, lat, alt type: float, float, float
-    return: long,lat alt return type: 6-Element Array of floats
-    '''
-    spkFiles()
+    #URL I tested it on
+    #http://localhost:8281/SunData?lon=29p001&lat=26p2121&alt=52p999&et=2012-08-04T10:00:00Z&planet=Mars
+    dataString = sun.sunData()
+    return dataString
 
-    input_state = [float(x), float(y), float(z), 1.1626723557311027, 23.918409779910249, 10.939171726577502]
-    input_coord_sys = 'RECTANGULAR'
-    output_coord_sys = 'PLANETOGRAPHIC'
-    body = 'Mars'
-
-    tempList = spy.xfmsta(input_state, input_coord_sys, output_coord_sys, body)
-
-    finalList = tempList[0], tempList[1], tempList[2]
-    return json.dumps(finalList)
-
-
-# cartToSpher(3.44619000e+03,0,0)
-
-@get('/marstosun')
-def marsToSun():
-    x = request.params.x
-    y = request.params.y
-    z = request.params.z
-    '''
-    Finds the direction of the sun in respect to a point on mars
-
-    param obspos: Observer position relative to center of motion.
-    type obspos: 3-Element Array of floats
-    return: State of target with respect to observer, One way light time between target and observer.
-    rtype:  list, direction of the sun in respect to a planet and light time
-    '''
-    spkFiles()
-
-    Target = 'Sun'
-    Et0 = 0.0
-    outref = 'J2000'
-    refloc = 'TARGET'
-    Abcorr = "NONE"
-    obspos = (float(x), float(y), float(z))
-    obsctr = 'Mars'
-    obsref = 'J2000'
-
-    list = spy.spkcpo(Target, Et0, outref, refloc, Abcorr, obspos, obsctr, obsref)
-    postionList = (list[0][0], list[0][1], list[0][2], list[1])
-    return json.dumps(postionList)
-
-
-# marsToSun(3446.1900000000001, -0.0, 0.0)
-
-@route('/centerearthtosun')
-def center_earthToSun():
-    '''
-    Finds the position of the sun from the center of earth.
-    Need the kernel that knows all the positions of the planets, satillites, ect
-
-    param: NONE
-    return: list (x,y,z) in km and light speed distance from target to observer
-    rtype: list
-    '''
-    Abcorr = "NONE"  #
-    Frame = "J2000"  #
-    spkFiles()
-    Et0 = 0.0  #
-    Observer = "Earth"  #
-    Target = "Sun"  #
-
-    list = spy.spkezr(Observer, Et0, Frame, Abcorr, Target)
-    postionList = (list[0][0], list[0][1], list[0][2], list[1])
-    return json.dumps(postionList)
- 
-
-# center_earthToSun()
-
-@route('/sphertocartearth')
-def spherToCartEarth():
-    long = request.params.long
-    lat = request.params.lat
-    alt = request.params.alt
-    '''
-    Changes spherical(long,lat,alt) to cartensian(x,y,z) in km
-
-    param: long, lat, alt type: float, float, float
-    return: x,y,z return type: 6-Element Array of floats
-    '''
-    spkFiles()
-
-    input_state = [float(long), float(lat), float(alt), 1.1626723557311027, 23.918409779910249, 10.939171726577502]
-    input_coord_sys = 'PLANETOGRAPHIC'
-    output_coord_sys = 'RECTANGULAR'
-    body = 'Earth'
-
-    tempList = spy.xfmsta(input_state, input_coord_sys, output_coord_sys, body)
-
-    finalList = tempList[0], tempList[1], tempList[2]
-    return json.dumps(finalList)
-
-''''
-@route('/earthtosun')
-def earthToSun():
-    spkFiles()
-    Target = 'Sun'
-    time = '2016 SEP 15 012:00:00.000000 UTC'
-    outref = 'J2000'
-    refloc = 'TARGET'
-    Abcorr = "NONE"
-
-    obspos = (6428.1400000000003, 0.0, 0.0)
-    obsctr = 'Earth'
-    obsref = 'J2000'
-
-    Et0 = spy.str2et(time)
-    list = spy.spkcpo(Target, Et0, outref, refloc, Abcorr, obspos, obsctr, obsref)
-    postionList = (list[0][0], list[0][1], list[0][2], list[1])
-    return str(postionList)
-'''
-
-run(host='localhost', port=8080, debug=True)
+run(host='localhost', port=8281, debug=True)
