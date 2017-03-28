@@ -115,4 +115,9 @@ def SunData():
     dataString = sun.sunData()
     return dataString
 
+@route('/getData', method='POST')
+def default():
+    json_text = request.json
+    return json_text
+
 run(host='localhost', port=8281, debug=True)
