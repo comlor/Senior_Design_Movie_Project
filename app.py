@@ -1,12 +1,36 @@
 from bottle import get, post, run, route, request, response, hook
 
 import spiceypy as spy
-import  json
+import json
+	
+@route('/<:re:.*>', method='OPTIONS')
+def enable_cors_generic_route():
+	"""
+	This route takes priority over all others. So any request with an OPTIONS
+	method will be handled by this function.
 
-@hook('after_request')
-def enable_cors():
-    response.headers['Access-Control-Allow-Origin'] = '*'
+	See: https://github.com/bottlepy/bottle/issues/402
 
+	NOTE: This means we won't 404 any invalid path that is an OPTIONS request.
+	"""
+	add_cors_headers()	
+	
+@hook('before_request')
+def enable_cors_after_request_hook():
+	"""
+	This executes after every route. We use it to attach CORS headers when
+	applicable.
+	"""
+	add_cors_headers()
+	
+def add_cors_headers():
+	if True:  # You don't have to gate this
+		response.headers['Access-Control-Allow-Origin'] = '*'
+		response.headers['Access-Control-Allow-Methods'] = \
+			'GET, POST, PUT, OPTIONS'
+		response.headers['Access-Control-Allow-Headers'] = \
+			'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token'
+			
 @route('/spiceoutput')
 class Spice():
     def __init__(self, lon, lat, alt, et, planet):
@@ -115,9 +139,9 @@ def SunData():
     dataString = sun.sunData()
     return dataString
 
-@route('/getData', method='POST')
-def default():
-    json_text = request.json
-    return json_text
+@post('/getData')
+def getData():
+	json_text = request.json
+	print(json_text)
 
 run(host='localhost', port=8281, debug=True)
