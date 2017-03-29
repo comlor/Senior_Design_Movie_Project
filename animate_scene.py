@@ -2,7 +2,7 @@ import bpy
 import os
 import re
 import glob
-from jpl_config import FilePaths
+from jpl_conf import FilePaths
 
 
 class AnimateScene:
@@ -19,9 +19,9 @@ class AnimateScene:
         # Set output directory to save final video
         self.out_dir = "./"
 
-        bpy.data.scenes["Scene"].render.resolution_x = self.path.render_res_x
-        bpy.data.scenes["Scene"].render.resolution_y = self.path.render_res_y
-        bpy.data.scenes["Scene"].render.resolution_percentage = self.path.render_res_percent
+        #bpy.data.scenes["Scene"].render.resolution_x = self.path.render_res_x
+        #bpy.data.scenes["Scene"].render.resolution_y = self.path.render_res_y
+        #bpy.data.scenes["Scene"].render.resolution_percentage = self.path.render_res_percent
 
     def animate(self):
         # Filter file list by valid file types.
@@ -59,9 +59,9 @@ class AnimateScene:
                                               channel=1, replace_sel=True, files=file)
         # (directory=in_dir, files=file, channel=1, frame_start=0, frame_end=n - 1)
 
-        stripname = file[0].get("name");
+        stripname = file[0].get("name")
         bpy.data.scenes["Scene"].frame_end = n
-        bpy.data.scenes["Scene"].render.image_settings.file_format = 'AVI_JPEG'
+        bpy.data.scenes["Scene"].render.image_settings.file_format = 'FFMPEG'
         bpy.data.scenes["Scene"].render.filepath = self.out_dir
         bpy.ops.render.render(animation=True)
 
@@ -69,6 +69,3 @@ class AnimateScene:
         stripname = file[0].get("name");
         print(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname])
         print(dir(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname]))
-
-
-

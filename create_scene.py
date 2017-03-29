@@ -1,221 +1,350 @@
-from jpl_config import FilePaths
 import bpy
-import bmesh
-from bpy import context as C
+#from osgeo import gdal, osr
+#import random
+#import mathutils
+#import math
+#import numpy
 
 
 class BuildScene:
 
-    def __init__(self, points, path):
-        self.path = path
+    def __init__(self, blender_options, file_path, geo_pts, user_selections):
+        # Scene Objects that will be created by this class
+        self.__camera_object = None
+        self.__sun_object = None
+        self.__camera_path = None
+        self.__curve_data = None
+        self.__polyline = None
+        self.__curve_object = None
+        self.__scene = bpy.context.scene
 
-        # Get a object of the current scene
-        self.scene = bpy.context.scene
+        # Points Received from front end of camera path points
+        self.__user_points = user_selections[0]
 
-        num_points = len(points)
-        print("Number of points: " + str(num_points))
-        self.eval_time = points[num_points - 1][0]
+        # Camera rotations where index corresponds to same index from user_points
+        self.__camera_orientation = user_selections[1]
 
-        self.points = self.inter(points)
-        self.path.end_frame = len(self.points)
-        self.set_end_frame()
+        # Lighting Orientations
+        self.__light_orientation = user_selections[2]
 
-    def inter(self, points):
-        result = [] # [[points[0][0], points[0][1], points[0][2]], ]
-        num_points = len(points)
+        # Lighting Position
+        self.__light_position = user_selections[3]
 
-        for pt in range(num_points):
-            result.append([points[pt][1], points[pt][2], points[pt][3]])
-            if pt + 1 < num_points:
-                dif_x = points[pt + 1][1] - points[pt][1]
-                dif_y = points[pt + 1][2] - points[pt][2]
-                dif_z = points[pt + 1][3] - points[pt][3]
-                print("dif_x: " + str(dif_x) + "   dif_y: " + str(dif_y) + "   dif_z: " + str(dif_z))
-                offset = (points[pt + 1][0] - points[pt][0]) * 24
-                print("offset: " + str(offset))
-                delta_x = dif_x / offset
-                delta_y = dif_y / offset
-                delta_z = dif_z / offset
-                print("delta_x: " + str(delta_x) + "   delta_y: " + str(delta_y) + "   delta_z: " + str(delta_z))
-                new_x = points[pt][1]
-                new_y = points[pt][2]
-                new_z = points[pt][3]
+        # Blender Configuration options object
+        self.__blender_options = blender_options
 
-                for i in range(offset):
-                    new_x += delta_x
-                    new_y += delta_y
-                    new_z += delta_z
-                    result.append([new_x, new_y, new_z])
-        return result
+        # File path object for file locations and use directories
+        self.__file_path = file_path
 
-    def set_end_frame(self):
-        bpy.data.scenes["Scene"].frame_end = self.path.end_frame
+        # GDAL data from meta data of dataset
+        self.__geo_pts = geo_pts
+
+        # Number of points the user has selected
+        self.__num_points = len(self.__user_points)
+
+    # Create camera path using vertices received from user and using linear interpolation to fille in the
+    # path between the points.
+    def camera_path(self):
+        # Get user selected point into list converted to pixel coordinates in blender
+        verts = []
+        for pt in self.__user_points:
+            verts.append(self.geo_2_pix(pt[1], pt[2], pt[3]))
+
+        # Create a new curve in 3D
+        self.__curve_data = bpy.data.curves.new('Camera_Path', type='CURVE')
+        self.__curve_data.dimensions = '3D'
+        self.__curve_data.resolution_u = 2
+
+        # Set the path duration to the number of frames of the last time offset multiplied by the
+        # number of frames per second of the animation.
+        self.__curve_data.path_duration = self.__user_points[self.__num_points - 1][0] * 24
+
+        self.__polyline = self.__curve_data.splines.new('POLY')
+        self.__polyline.points.add(len(verts)-1)
+
+        for n, (x, y, z) in enumerate(verts):
+            self.__polyline.points[n].co = (x, y, z, 1)
+
+        self.__camera_path = bpy.data.objects.new('PATH', self.__curve_data)
+        self.__scene.frame_end = self.__user_points[self.__num_points - 1][0] * 24
+        self.__curve_object = bpy.data.objects['PATH']
+
+    # Create a camera object and place on scene in the starting location of the animation based on user
+    # defined points
+    def make_camera(self):
+        bpy.ops.object.select_all(action='DESELECT')
+
+        # Create a new Camera Object on the scene
+        new_camera = bpy.data.cameras.new("MyCamera")
+        self.__camera_object = bpy.data.objects.new("MyCamera", new_camera)
+
+        # Set the orientation of the camera to the first rotation values from the data created by user
+        self.__camera_object.rotation_mode = 'QUATERNION'
+        self.__camera_object.rotation_quaternion = (self.__camera_orientation[0][0],
+                                                    self.__camera_orientation[0][1],
+                                                    self.__camera_orientation[0][2],
+                                                    self.__camera_orientation[0][3])
+
+        self.__camera_object.select = True
+
+        # Create a constraint on the camera object to follow path and bind to the path created by
+        # the camera_path() function.
+        self.__camera_object.constraints.new('FOLLOW_PATH')
+        self.__camera_object.constraints["Follow Path"].target = self.__camera_path
+        self.__camera_object.constraints["Follow Path"].forward_axis = "FORWARD_Z"
+
+    # Make the camera object a chile of the camera path object so the follow path constraint
+    # makes camera follow along the path when animated.
+    def link_camera_path(self):
+        self.__scene.objects.link(self.__camera_path)
+        self.__scene.objects.active = self.__camera_path
+        self.__camera_path.select = True
+
+        self.__scene.objects.link(self.__camera_object)
+
+        start_loc = self.geo_2_pix(self.__user_points[0][1], self.__user_points[0][2], self.__user_points[0][3])
+        self.__camera_object.location = start_loc
+
+        self.__camera_object.select = True
+
+    # Using key frames and linear interpolation to set the timing between each user defined point
+    # of the camera path
+    def key_frame_camera(self):
+        # Convert each user selected value to pixel coordinates in blender as a new list
+        verts = []
+        for pt in self.__user_points:
+            verts.append(self.geo_2_pix(pt[1], pt[2], pt[3]))
+
+        # Camera must be only active object or animation will not run properly.
+        bpy.ops.object.select_all(action='DESELECT')
+        self.__camera_object.select = True
+
+        # Loop through all the point indexes(verts[]) and insert a key frame at the user selected point
+        # after selected the appropriate frame in the animation that that point should represent.  This
+        # allows to systematically determine how long the path should animate between any two given
+        # points in the animation.
+        num_points = len(verts)
+        previous_frame = self.__user_points[0]
+        current_frame_num = 0
+        for point in range(num_points):
+            current_frame_num += (self.__user_points[point][0] - previous_frame[0]) * 24 + 1
+            self.__camera_object.location = verts[point]
+            self.__camera_object.keyframe_insert(data_path="location", frame=current_frame_num)
+            previous_frame = self.__user_points[point]
+
+        # After all key frames have been created.  Loop through all the key frames and set the interpolation
+        # type to linear so that the camera follows the path explicitly.  Otherwise the animation will use
+        # bezier as default create smooth curves.
+        my_curve = self.__camera_object.animation_data.action.fcurves
+        for curve in my_curve:
+            for key in curve.keyframe_points:
+                key.interpolation = 'LINEAR'
+
+    # Sets the end_frame inside blender and saves information in blender configuration
+    # class variable for rendering tasks to use
+    def set_end_frame(self, end_frame):
+        # Update the end_frame variable in jpl_conf.py for use in other classes
+        self.__blender_options.set_end_frame(end_frame)
+
+        # Set the scene values so the animation knows the last frame.
+        bpy.data.scenes["Scene"].frame_end = end_frame
         bpy.data.scenes["Scene"].frame_step = 1.0
 
+    # Convert GPS Lon/Lat to pixel coordinates in blender
+    # Altitude needs work yet
+    def geo_2_pix(self, x, y, z):
+        # Retrience the scale of the imported mesh(default is 0.01)
+        img_scale = self.__file_path.get_IMG_scale()
+
+        # Get the values of the origin from the HiRise meta data
+        lon_origin = self.__geo_pts[2][0][0]
+        lat_origin = self.__geo_pts[2][0][1]
+
+        # Get the Max Latitude and Longitude from the meta data using the bottom right corner of the HiRise IMG
+        # The upper left corner is the origin in the projections
+        lon_max = self.__geo_pts[2][2][0]
+        lat_max = self.__geo_pts[2][2][1]
+
+        # Set the value to be converted that is in GPS "Degree, Minutes, Seconds" -> Converted to a decimal value
+        lon_proj = x
+        lat_proj = y
+
+        # Get the Pixel width and height of the HiRise IMG from the meta data.
+        width = self.__geo_pts[0][2][0]
+        height = self.__geo_pts[0][2][1]
+
+        # Calculate the absolute value of the the total change in latitude and longitude values from max and origin
+        delta_lon = abs(lon_max - lon_origin)
+        delta_lat = abs(lat_max - lat_origin)
+
+        # Calculate the degree per pixel(dpp) by dividing delta values by the width and height pixel values
+        x_dpp = delta_lon / width
+        y_dpp = delta_lat / height
+
+        # Calculate the projection pixel values and multiply by the imported scale so the values are scaled
+        # for the imported IMG size.  Without the img_scale this calculation assumes a 1-1 or 1.0 scale import
+        x_proj = ((lon_proj - lon_origin) / x_dpp) * img_scale
+        y_proj = ((lat_proj - lat_origin) / y_dpp) * img_scale
+        z_proj = z * img_scale # Not scientifically accurate yet
+
+        # Return a list of the pixel projected values.
+        return [x_proj, y_proj, z_proj]
+
+    # Creates a sun lamp.
+    # Not scientifically accurate yet
     def create_lamp(self):
         # Create a new light source object as a sun
         lamp_data = bpy.data.lamps.new(name="Sun", type='SUN')
+        lamp_data.use_nodes = True
+        bpy.data.lamps["Sun"].node_tree.nodes["Emission"].inputs[1].default_value = 3.0
 
         # Create new object with our lamp datablock
         lamp_object = bpy.data.objects.new(name="Sun", object_data=lamp_data)
 
         # Link lamp object to the scene so it'll appear in this scene
-        self.scene.objects.link(lamp_object)
+        self.__scene.objects.link(lamp_object)
 
         # Place lamp to a specified location
-        lamp_object.location = (148.0, -100.0, 77.0)
+        lamp_object.location = (self.__light_position[0][1],
+                                self.__light_position[0][2],
+                                self.__light_position[0][3])
 
         # Set the rotation of the lamp
-        lamp_object.rotation_euler = (1.6, -0.82, 0.18)
+        lamp_object.rotation_mode = 'QUATERNION'
+        lamp_object.rotation_quaternion = (self.__light_orientation[0][1],
+                                           self.__light_orientation[0][2],
+                                           self.__light_orientation[0][3],
+                                           self.__light_orientation[0][4])
 
-        # Set lighting options so textures can be rendered and visible
-        #lmp = bpy.data.lamps[lamp_data.name]
-        #lmp.energy = self.path.energy
-        #lmp.use_specular = False
+    # Create camera rotations during animation by setting key frames a few frames before and after the
+    # transition point and interpolating the rotation values to create a smooth rotational transition of
+    # the cameras orientation
+    def set_camera_orientation(self):
+        scene = bpy.context.scene
+        scene.objects.active = bpy.data.objects['MyCamera']
 
-    def create_camera(self):
-        # Create a new camera object
-        camera_data = bpy.data.cameras.new("MyCamera")
-
-        # bpy.data.cameras['MyCamera'].CAMERA_MT_presets = self.path.get_camera_preset()
-
-        # Create new object with the camera data
-        camera_object = bpy.data.objects.new(name="MyCamera", object_data=camera_data)
-
-        # Link camera to the scene
-        self.scene.objects.link(camera_object)
-
-        # Place camera to a specified location
-        # camera_object.location = (150.0, -85.0, 100.0)
-        print("camera x: " + str(self.points[0][0]))
-        print("camera y: " + str(self.points[0][1]))
-        print("camera z: " + str(self.points[0][2]))
-        camera_object.location = (self.points[0][0], self.points[0][1], self.points[0][2])
-
-        # Set the rotation of the camera
-        camera_object.rotation_euler = (1.57, 0.0, 0.0)
-
-        # Get new camera object we created
-        cam = bpy.data.cameras[camera_data.name]
-
-        # Set the focal length of the camera lens.  Zoom out(default 32)
-        cam.lens = 10
-
-    def create_camera_path(self): # FAKE DATA ----- Change this to create path from given data
-        # Create a new curve in 3D
-        curve_data = bpy.data.curves.new('Camera_Path', type='CURVE')
-        curve_data.dimensions = '3D'
-        curve_data.resolution_u = 2
-
-        # map coords to spline
-        polyline = curve_data.splines.new('NURBS')
-        polyline.points.add(self.path.end_frame)
-
-        num = len(self.points)
-        print("size; " + str(num))
-        for p in range(len(self.points)):
-            polyline.points[p].co = (self.points[p][0], self.points[p][1], self.points[p][2], 1)
-        # ###########################
-        # Test Data for Camera Path
-        # ###########################
-        # Creates a diagonal polyline path
-        # x_pos = 150.0
-        # y_pos = -85.0
-        # z_pos = 100.0
-        # for i in range(self.end_frame):
-        #    polyline.points[i].co = (x_pos, y_pos, z_pos, 1)
-        #    x_pos += 1
-        #    z_pos += 3
-        #############################
-
-        print("length: " + str(len(self.points)))
-        print("eval_time: " + str(self.eval_time))
-        bpy.data.curves["Camera_Path"].path_duration = len(self.points)
-        bpy.data.curves["Camera_Path"].eval_time = self.eval_time
-
-        # Create a curve object with the name Camera_Path
-        curve_object = bpy.data.objects.new('Camera_Path', curve_data)
-
-        # Link path to the Scene
-        self.scene.objects.link(curve_object)
-
-    def create_key_frames(self): # Fake data ---- Should receive list and create keyframes from data
-        # Set Key Frames ---- Currently breaks camera path binding
-        bpy.data.scenes['Scene'].frame_current = 50
-        bpy.data.curves['Camera_Path'].eval_time = 30
-        bpy.data.curves['Camera_Path'].keyframe_insert(data_path='eval_time')
-
-        bpy.data.scenes['Scene'].frame_current = 125
-        bpy.data.curves['Camera_Path'].eval_time = 60
-        bpy.data.curves['Camera_Path'].keyframe_insert(data_path='eval_time')
-
-        bpy.data.scenes['Scene'].frame_current = 250
-        bpy.data.curves['Camera_Path'].eval_time = 120
-        bpy.data.curves['Camera_Path'].keyframe_insert(data_path='eval_time')
-
-    def bind_camera_path(self):
-        # Get Camera object
+        # Deselect All objects.  only camera can be selected for this
+        bpy.ops.object.select_all(action='DESELECT')
         camera = bpy.data.objects['MyCamera']
-        # Get Camera_Path object
-        path = bpy.data.objects['Camera_Path']
-
-        # Set both Camera and Camera_Path object as selected
         camera.select = True
-        path.select = True
 
-        # Make objects active and set camera to follow camera path.
-        bpy.context.scene.objects.active = path
-        bpy.ops.object.parent_set(type='FOLLOW')  # follow path
+        # Create camera object from our currently selected camera
+        camera_object = bpy.context.active_object
 
+        # Get a list of the time offsets from the user selected data
+        time_offsets = []
+        for item in self.__user_points:
+            time_offsets.append(item[0])
 
-    def new_reducer(self):
-        myobject = bpy.data.objects['theMartianColor']
-        myobject.select = True
+        # For every time offset we create a key frame on the camera object 10 frames before and after each offset
+        # so that the camera makes a smooth transition to the new rotation values.
+        for index in range(len(time_offsets)):
+            frame = time_offsets[index] * 24
 
-        bpy.context.scene.objects.active = myobject
+            if(frame == 0) or (frame == self.__blender_options.get_end_frame()):
+                continue
+            else:
+                bpy.context.scene.frame_set(frame-10) # Need to change so finishes 1 frame before the offset
+                camera_object.rotation_quaternion = (self.__camera_orientation[index-1][1],
+                                                     self.__camera_orientation[index-1][2],
+                                                     self.__camera_orientation[index-1][3],
+                                                     self.__camera_orientation[index-1][4])
+                camera_object.keyframe_insert(data_path='rotation_quaternion')
 
-        me = bpy.context.object.data
+                bpy.context.scene.frame_set(frame+10)
+                camera_object.rotation_quaternion = (self.__camera_orientation[index][1],
+                                                     self.__camera_orientation[index][2],
+                                                     self.__camera_orientation[index][3],
+                                                     self.__camera_orientation[index][4])
+                camera_object.keyframe_insert(data_path='rotation_quaternion')
 
-        bm = bmesh.new()
-        bm.from_mesh(me)
-
-        location = C.object.delta_location
-        dimension = C.object.dimensions
-
-        for i in range(int(location[0]), int(dimension[0]), int(dimension[0] / 3)):
-            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(i, 0, 0),
-                                         plane_no=(1, 0, 0))
-            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
-
-        for i in range(int(location[1]), int(dimension[1]), int(dimension[1] / 3)):
-            ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, i, 0),
-                                         plane_no=(0, 1, 0))
-            bmesh.ops.split_edges(bm, edges=[e for e in ret['geom_cut'] if isinstance(e, bmesh.types.BMEdge)])
-
-        bm.to_mesh(me)
-        bm.free()
-        myobject.select = False
-
-
+    # Set the blender options of the Blender Internal Render Engine.  The values of these settings can be set
+    # in the jpl_conf.py file.
     def set_render_options(self):
         # Set Rendering Options
-        bpy.data.scenes["Scene"].render.resolution_x = self.path.render_res_x
-        bpy.data.scenes["Scene"].render.resolution_y = self.path.render_res_y
-        bpy.data.scenes["Scene"].render.resolution_percentage = self.path.render_res_percent
-        bpy.data.scenes["Scene"].render.use_border = self.path.use_border
-        bpy.data.scenes["Scene"].render.use_raytrace = self.path.use_ray_trace
-        bpy.data.scenes["Scene"].render.use_antialiasing = self.path.use_anti_aliasing
-        bpy.data.scenes["Scene"].render.use_shadows = self.path.use_shadows
-        bpy.data.scenes["Scene"].render.use_sss = self.path.use_sss
-        bpy.data.scenes["Scene"].render.tile_x = self.path.render_tile_x
-        bpy.data.scenes["Scene"].render.tile_y = self.path.render_tile_y
-        bpy.data.scenes["Scene"].render.use_simplify = self.path.use_simplify
-        bpy.data.scenes["Scene"].render.simplify_subdivision = self.path.simplify_subdivision
-        bpy.data.scenes["Scene"].render.simplify_subdivision_render = self.path.simplify_subdivision_render
 
+        # Rendering Resolution
+        bpy.data.scenes["Scene"].render.resolution_x = self.__blender_options.get_render_res_x()
+        bpy.data.scenes["Scene"].render.resolution_y = self.__blender_options.get_render_res_y()
+        bpy.data.scenes["Scene"].render.resolution_percentage = self.__blender_options.get_render_res_percent()
+        bpy.data.scenes["Scene"].render.use_border = self.__blender_options.get_use_border()
+        bpy.data.scenes["Scene"].render.use_crop_to_border = self.__blender_options.get_crop_to_border()
+
+        # Render Shading
+        bpy.data.scenes["Scene"].render.use_raytrace = self.__blender_options.get_use_ray_trace()
+        bpy.data.scenes["Scene"].render.alpha_mode = self.__blender_options.get_alpha_mode()
+        bpy.data.scenes["Scene"].render.use_shadows = self.__blender_options.get_use_shadows()
+        bpy.data.scenes["Scene"].render.use_sss = self.__blender_options.get_sss()
+
+        # Render Performance
+        bpy.data.scenes["Scene"].render.tile_x = self.__blender_options.get_render_tile_x()
+        bpy.data.scenes["Scene"].render.tile_y = self.__blender_options.get_render_tile_y()
+        bpy.data.scenes["Scene"].render.raytrace_method = self.__blender_options.get_ray_trace_method()
+        bpy.data.scenes["Scene"].render.octree_resolution = self.__blender_options.get_octree_resolution()
+
+        # Render Anti Aliasing
+        bpy.data.scenes["Scene"].render.use_antialiasing = self.__blender_options.get_use_anti_aliasing()
+        bpy.data.scenes["Scene"].render.antialiasing_samples = self.__blender_options.get_anti_aliasing_samples()
+
+        # Render Simplify
+        bpy.data.scenes["Scene"].render.use_simplify = self.__blender_options.get_use_simplify()
+        bpy.data.scenes["Scene"].render.simplify_subdivision = self.__blender_options.get_simplify_subdivision()
+        bpy.data.scenes["Scene"].render.simplify_subdivision_render = \
+            self.__blender_options.get_simplify_subdivision_render()
+
+        bpy.data.scenes["Scene"].view_settings.view_transform = self.__blender_options.get_view_render_color()
+
+    # Set the blender options of the Lighting Configurations.  The values of these settings. can be set
+    # in the jpl_conf.py file.
+    def set_lighting_options(self):
         # Set Lighting Options
-        bpy.data.lamps["Sun"].shadow_method = self.path.shadow_method
-        bpy.data.lamps["Sun"].shadow_soft_size = self.path.shadow_soft_size
-        bpy.data.lamps["Sun"].shadow_ray_samples = self.path.shadow_ray_samples
-        bpy.data.lamps["Sun"].use_specular = self.path.use_specular
-        bpy.data.lamps["Sun"].energy = self.path.energy
+        bpy.data.lamps["Sun"].shadow_method = self.__blender_options.get_shadow_method()
+        bpy.data.lamps["Sun"].shadow_soft_size = self.__blender_options.get_shadow_soft_size()
+        bpy.data.lamps["Sun"].shadow_ray_samples = self.__blender_options.get_shadow_ray_samples()
+        bpy.data.lamps["Sun"].use_specular = self.__blender_options.get_use_specular()
+        bpy.data.lamps["Sun"].energy = self.__blender_options.get_light_energy()
+
+    def set_cycles_options(self):
+        # Set Render Engine to Cycles
+        bpy.data.scenes["Scene"].render.engine = self.__blender_options.get_render_engine()
+
+        bpy.data.scenes["Scene"].view_settings.view_transform = self.__blender_options.get_view_render_color()
+
+        # Rendering Resolution
+        bpy.data.scenes["Scene"].render.resolution_x = self.__blender_options.get_render_res_x()
+        bpy.data.scenes["Scene"].render.resolution_y = self.__blender_options.get_render_res_y()
+        bpy.data.scenes["Scene"].render.resolution_percentage = self.__blender_options.get_render_res_percent()
+        bpy.data.scenes["Scene"].render.use_border = self.__blender_options.get_use_border()
+        bpy.data.scenes["Scene"].render.use_crop_to_border = self.__blender_options.get_crop_to_border()
+
+        # Render Performance
+        bpy.data.scenes["Scene"].render.tile_x = self.__blender_options.get_render_tile_x()
+        bpy.data.scenes["Scene"].render.tile_y = self.__blender_options.get_render_tile_y()
+
+        bpy.data.scenes["Scene"].cycles.seed = 0
+        bpy.data.scenes["Scene"].cycles.samples = 16
+        bpy.data.scenes["Scene"].cycles.preview_samples = 16
+        bpy.data.scenes["Scene"].cycles_curves.use_curves = True
+        bpy.data.scenes["Scene"].cycles_curves.cull_backfacing = True
+        bpy.data.scenes["Scene"].cycles.max_bounces = 8
+        bpy.data.scenes["Scene"].cycles.min_bounces = 4
+        bpy.data.scenes["Scene"].cycles.diffuse_bounces = 0
+        bpy.data.scenes["Scene"].cycles.glossy_bounces = 1
+        bpy.data.scenes["Scene"].cycles.transmission_bounces = 2
+        bpy.data.scenes["Scene"].cycles.volume_bounces = 0
+        bpy.data.scenes["Scene"].cycles.use_transparent_shadows = True
+        bpy.data.scenes["Scene"].cycles.caustics_reflective = False
+        bpy.data.scenes["Scene"].cycles.caustics_refractive = False
+        bpy.data.scenes["Scene"].render.use_motion_blur = False
+        bpy.data.scenes["Scene"].cycles.debug_use_spatial_splits = True
+        bpy.data.scenes["Scene"].render.use_simplify = True
+        bpy.data.scenes["Scene"].render.simplify_subdivision_render = 1
+        bpy.data.scenes["Scene"].cycles.use_camera_cull = True
+
+        #bpy.data.scenes["terrain"].cycles.use_camera_cull = True
+
+
+        bpy.data.lamps["Sun"].shadow_soft_size = self.__blender_options.get_shadow_soft_size()
+        bpy.data.lamps["Sun"].cycles.max_bounces = 16
+        bpy.data.lamps["Sun"].cycles.cast_shadow = False
+        bpy.data.lamps["Sun"].cycles.use_multiple_importance_sampling = False
