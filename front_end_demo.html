@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="CZML Path">
+    <meta name="cesium-sandcastle-labels" content="CZML">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    require.config({
+        baseUrl : '../../../Source',
+        waitSeconds : 60
+    });
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+@import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar"></div>
+
+<script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var counter = 0;
+var offset_ratio = 6356752.314245179/3392593.6110435;
+//var mars_globe = new Cesium.Globe(new Cesium.Ellipsoid(3392593.6110435, 3392593.6110435, 3392593.6110435))
+var viewer = new Cesium.Viewer('cesiumContainer', {
+//globe: mars_globe,
+skyAtmosphere: false,
+baseLayerPicker: false,
+selectionIndicator : false
+});
+
+viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+//mars radius = 3392593.6110435
+viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({
+    url : '../../SampleData/models/CesiumAir/2gltf/download.png'
+}));
+//var rotationQuaternion = Cesium.Quaternion.fromHeadingPitchRoll(0, 5.19, 15.31);
+var img = [{
+	"id" : "document",
+	"name" : "img Model",
+	"version" : "1.0"
+}, {
+	"id" : "sample",
+	"position" : {
+		"cartographicDegrees" : [27.83998, 28.16131, 10000]
+	},
+	"model": {
+		"gltf" : "../../SampleData/models/lessShiny/sample.gltf",
+		"scale" : offset_ratio,
+		"minimumPixelSize": 10
+	}
+	/*,
+	"orientation":{
+		"unitQuaternion":[
+			rotationQuaternion.x, rotationQuaternion.y, rotationQuaternion.z, rotationQuaternion.w
+		]
+	}*/
+}];
+	
+var promise = viewer.dataSources.add(Cesium.CzmlDataSource.load(img));
+
+promise.then(function(dataSource){
+    //viewer.trackedEntity = dataSource.entities.getById('sample');
+}).otherwise(function(error){
+    window.alert(error);
+});
+
+viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(27.9166084356, 28.0072931253, 10000000)
+});
+
+viewer.entities.add({
+    id: 'position',
+    label: {
+        show: false
+    }
+});
+/*
+viewer.scene.canvas.addEventListener('mousemove', function(e) {
+    var entity = viewer.entities.getById('position');
+    var ellipsoid = viewer.scene.globe.ellipsoid;
+    // Mouse over the globe to see the cartographic position
+    var cartesian = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(e.clientX, e.clientY), ellipsoid);
+
+    if (cartesian) {
+        var cartographic = ellipsoid.cartesianToCartographic(cartesian);
+        var longitudeString = Cesium.Math.toDegrees(cartographic.longitude).toFixed(10);
+        var latitudeString = Cesium.Math.toDegrees(cartographic.latitude).toFixed(10);
+        entity.position = cartesian;
+        entity.label.show = true;
+        entity.label.text = '(' + longitudeString + ', ' + latitudeString;
+    } else {
+        entity.label.show = false;
+    }
+});
+*/
+function Node(value) {
+    this.data = value;
+    this.previous = null;
+    this.next = null;
+}
+
+function DoublyList() {
+    this._length = 0;
+    this.head = null;
+    this.tail = null;
+}
+ 
+DoublyList.prototype.add = function(value) {
+    var node = new Node(value);
+ 
+    if (this._length) {
+        this.tail.next = node;
+        node.previous = this.tail;
+        this.tail = node;
+    } else {
+        this.head = node;
+        this.tail = node;
+    }
+ 
+    this._length++;
+ 
+    return node;
+};
+ 
+DoublyList.prototype.searchNodeAt = function(position) {
+    var currentNode = this.head,
+        length = this._length,
+        count = 1,
+        message = {failure: 'Failure: non-existent node in this list.'};
+ 
+    // 1st use-case: an invalid position
+    if (length === 0 || position < 1 || position > length) {
+        throw new Error(message.failure);
+    }
+ 
+    // 2nd use-case: a valid position
+    while (count < position) {
+        currentNode = currentNode.next;
+        count++;
+    }
+ 
+    return currentNode;
+};
+ 
+DoublyList.prototype.remove = function(position) {
+    var currentNode = this.head,
+        length = this._length,
+        count = 1,
+        message = {failure: 'Failure: non-existent node in this list.'},
+        beforeNodeToDelete = null,
+        nodeToDelete = null,
+        afterNodeToDelete = null,
+        deletedNode = null;
+ 
+    // 1st use-case: an invalid position
+    if (length === 0 || position < 1 || position > length) {
+        throw new Error(message.failure);
+    }
+ 
+    // 2nd use-case: the first node is removed
+    if (position === 1) {
+        this.head = currentNode.next;
+ 
+        // 2nd use-case: there is a second node
+        if (this._length > 1) {
+            this.head.previous = null;
+        // 2nd use-case: there is no second node
+        } else {
+            this.tail = null;
+        }
+ 
+    // 3rd use-case: the last node is removed
+    } else if (position === this._length) {
+        this.tail = this.tail.previous;
+        this.tail.next = null;
+    // 4th use-case: a middle node is removed
+    } else {
+        while (count < position) {
+            currentNode = currentNode.next;
+            count++;
+        }
+ 
+        beforeNodeToDelete = currentNode.previous;
+        nodeToDelete = currentNode;
+        afterNodeToDelete = currentNode.next;
+ 
+        beforeNodeToDelete.next = afterNodeToDelete;
+        afterNodeToDelete.previous = beforeNodeToDelete;
+        deletedNode = nodeToDelete;
+        nodeToDelete = null;
+    }
+ 
+    this._length--;
+ 
+    return message.success;
+};
+
+var pointsarray = new DoublyList();
+
+function removePointsAndLines(){
+    for(var i = 1; i <= pointsarray._length; i++){
+
+        viewer.entities.removeById(i.toFixed(1));
+
+        if(i > 1){
+            viewer.entities.removeById('line'+i);
+        }
+    }
+}
+
+function drawLine(point1, point2, id){
+    var linearray = [Number(point1.long),Number(point1.lat),Number(point1.alt),Number(point2.long),Number(point2.lat),Number(point2.alt)];
+
+    viewer.entities.add({
+        id: 'line'+id,
+        name: 'Purple straight arrow at height',
+        polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights(linearray),
+            width: 10,
+            followSurface: false,
+            material: new Cesium.PolylineArrowMaterialProperty(Cesium.Color.BLUE)
+        }
+    });            
+}
+
+function createBillboardAndDescription(ee){
+    
+    ee.description = '\
+    ID: <input type="text" name ="id" value="'+ee.id+'" readonly><br>\
+    Longitude: <input type="text" name="Longitude" id="Longitude" value="' + pointsarray.searchNodeAt(ee.id).data.long + '"><br>\
+    Latitude: <input type="text" name="Latitude" id="Latitude" value="' + pointsarray.searchNodeAt(ee.id).data.lat + '"><br>\
+    Altitude: <input type="text" name="Altitude" id="Altitude" value="' + pointsarray.searchNodeAt(ee.id).data.alt + '"><br>\
+    Time offset: <input type="text" name="Time" id="Time" value="'+ pointsarray.searchNodeAt(ee.id).data.timeoffset +'"><br>\
+    Heading: <input type = "text" name="Heading" id="Heading" value="'+ pointsarray.searchNodeAt(ee.id).data.heading +'"><br>\
+    Pitch: <input type = "text" name="Pitch" id="Pitch" value="'+ pointsarray.searchNodeAt(ee.id).data.pitch +'"><br>\
+    Roll: <input type = "text" name="Roll" id="Roll" value="'+ pointsarray.searchNodeAt(ee.id).data.roll +'"><br>\
+    <div style="padding:15px"><button class="delete-button">\
+    delete</button></div> <br>\
+    <div style="padding:15px"><button class="edit-button">\
+    edit</button></div>';
+
+    ee.billboard = {
+        image: new Cesium.PinBuilder().fromText(ee.id, Cesium.Color.BLACK, 48).toDataURL(),
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+    };
+}
+
+viewer.infoBox.frame.setAttribute('sandbox', 'allow-same-origin allow-popups allow-forms allow-scripts allow-top-navigation');  
+                
+viewer.infoBox.frame.addEventListener('load', function() {
+    viewer.infoBox.frame.contentDocument.body.addEventListener('click', function(r) {
+        if (r.target && r.target.className === 'delete-button') {
+            removePointsAndLines();
+			console.log('removednumber:' + Number(viewer.infoBox.frame.contentDocument.getElementsByName("id")[0].value));
+            pointsarray.remove(Number(viewer.infoBox.frame.contentDocument.getElementsByName("id")[0].value));
+            counter = 0;
+            for(counter;counter<pointsarray._length;){
+                counter++;
+                viewer.entities.add({
+                    id: counter.toFixed(1),
+                    position: Cesium.Cartesian3.fromDegrees(Number(pointsarray.searchNodeAt(counter).data.long), Number(pointsarray.searchNodeAt(counter).data.lat), Number(pointsarray.searchNodeAt(counter).data.alt)),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.RED
+                    }
+                });
+                
+                createBillboardAndDescription(viewer.entities.getById(counter.toFixed(1)));
+                
+                if (counter >= 2) {
+                    drawLine(pointsarray.searchNodeAt(counter-1).data, pointsarray.searchNodeAt(counter).data, counter);
+                }
+            }
+        }
+        
+        if (r.target && r.target.className === 'edit-button') {
+       
+            removePointsAndLines();
+
+            var id = viewer.infoBox.frame.contentDocument.getElementsByName("id")[0].value;
+            var lat = viewer.infoBox.frame.contentDocument.getElementsByName("Latitude")[0].value;
+            var long = viewer.infoBox.frame.contentDocument.getElementsByName("Longitude")[0].value;
+            var alt = viewer.infoBox.frame.contentDocument.getElementsByName("Altitude")[0].value;
+            var timeoffset = viewer.infoBox.frame.contentDocument.getElementsByName("Time")[0].value;
+            var heading = viewer.infoBox.frame.contentDocument.getElementsByName("Heading")[0].value;
+            var pitch = viewer.infoBox.frame.contentDocument.getElementsByName("Pitch")[0].value;
+            var roll = viewer.infoBox.frame.contentDocument.getElementsByName("Roll")[0].value;
+            
+
+            pointsarray.searchNodeAt(id).data.long = Number(long);
+            pointsarray.searchNodeAt(id).data.lat = Number(lat);
+            pointsarray.searchNodeAt(id).data.alt = Number(alt);
+            pointsarray.searchNodeAt(id).data.timeoffset = Number(timeoffset);
+            pointsarray.searchNodeAt(id).data.heaidng = Number(heading);
+            pointsarray.searchNodeAt(id).data.pitch = Number(pitch);
+            pointsarray.searchNodeAt(id).data.roll = Number(roll);
+
+
+            counter = 0;
+            for(counter;counter<pointsarray._length;){
+                counter++;
+                viewer.entities.add({
+                    id: counter.toFixed(1),
+                    position: Cesium.Cartesian3.fromDegrees(Number(pointsarray.searchNodeAt(counter).data.long), Number(pointsarray.searchNodeAt(counter).data.lat), Number(pointsarray.searchNodeAt(counter).data.alt)),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.RED
+                    }
+                });
+         
+                createBillboardAndDescription(viewer.entities.getById(counter.toFixed(1)));
+
+                if (counter >= 2) {
+                    drawLine(pointsarray.searchNodeAt(counter-1).data, pointsarray.searchNodeAt(counter).data, counter);
+                }
+            }
+        }
+    }, false);
+}, false);
+
+viewer.scene.canvas.addEventListener('dblclick', function(e) {
+
+//console.log(mars_globe.getHeight(cartographic));
+    counter++;
+    var mousePosition = new Cesium.Cartesian2(e.clientX, e.clientY);
+    var ellipsoid = viewer.scene.globe.ellipsoid;
+    var cartesian = viewer.camera.pickEllipsoid(mousePosition, ellipsoid);
+    if (cartesian) {
+        var cartographic = ellipsoid.cartesianToCartographic(cartesian);
+		//console.log(viewer.scene.globe.getHeight(Cesium.Cartographic.fromCartesian(cartesian,ellipsoid)));
+        var longitudeString = Cesium.Math.toDegrees(cartographic.longitude).toFixed(10);
+        var latitudeString = Cesium.Math.toDegrees(cartographic.latitude).toFixed(10);
+        var altitude = viewer.scene.globe.getHeight(Cesium.Cartographic.fromCartesian(cartesian,ellipsoid));
+        var timeoffset = 0;
+        if(counter > 1){
+            timeoffset = 30;
+        }
+        var heading = 0;
+        var pitch = -90;
+        var roll = 0;
+        var pointdata = {
+            long: longitudeString,
+            lat: latitudeString,
+            alt: altitude,
+            timeoffset: timeoffset,
+            heading: heading,
+            pitch: pitch,
+            roll: roll,
+        };
+        pointsarray.add(pointdata);
+        viewer.entities.add({
+            id: counter.toFixed(1),
+            position: Cesium.Cartesian3.fromDegrees(Cesium.Math.toDegrees(cartographic.longitude), Cesium.Math.toDegrees(cartographic.latitude), altitude),
+            point: {
+                pixelSize: 5,
+                color: Cesium.Color.RED
+            }
+        });
+        
+        createBillboardAndDescription(viewer.entities.getById(counter.toFixed(1)));
+
+        if (counter >= 2) {
+            drawLine(pointsarray.searchNodeAt(counter-1).data, pointsarray.searchNodeAt(counter).data,counter);
+        }
+        
+    } else {
+        alert('Globe was not picked');
+    }
+
+}, false);
+
+function convert( heading, pitch, roll){
+    heading = (heading/180) * Math.PI;
+    pitch = (pitch/180) * Math.PI;
+    roll = (roll/180) * Math.PI;
+    
+    //var result;
+    return Cesium.Quaternion.fromHeadingPitchRoll(heading, pitch, roll);
+    //return result;
+}
+
+function create(){
+    var czml = [{
+        "id" : "document",
+        "name" : "CZML Path",
+        "version" : "1.0",
+        "clock": {
+            "interval": "2012-08-04T10:00:00Z/2012-08-04T15:00:00Z",
+            "currentTime": "2012-08-04T10:00:00Z",
+            "multiplier": 1
+        }
+    }, {
+        "id" : "camera",
+        "availability" : "2012-08-04T10:00:00Z/2012-08-04T15:00:00Z",
+        "path" : {
+            "material" : {
+                "polylineOutline" : {
+                    "color" : {
+                        "rgba" : [255, 0, 255, 255]
+                    },
+                    "outlineColor" : {
+                        "rgba" : [0, 255, 255, 255]
+                    },
+                    "outlineWidth" : 0
+                }
+            },
+            "width" : 0,
+            "leadTime" : 0,
+            "trailTime" : 0,
+            "resolution" : 0
+        },
+        "billboard" : {
+            "image" : "data:image/png;base64,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",
+            "scale" : 1.5,
+            "eyeOffset": {
+                "cartesian": [ 0.0, 0.0, -10.0 ]
+            }
+        },
+        "position" : {
+            "epoch" : "2012-08-04T10:00:00Z",
+            "cartographicDegrees" : []
+        },
+        "orientation" : {
+            "epoch" : "2012-08-04T10:00:00Z",
+            "unitQuaternion" : []
+        }
+    }];
+
+    var pointarray = [];
+    var orientationarray = [];
+    var timeoffset = 0;
+    for(var i = 1; i <= pointsarray._length; i++){
+        timeoffset += pointsarray.searchNodeAt(i).data.timeoffset;
+        pointarray.push(timeoffset);
+        pointarray.push(pointsarray.searchNodeAt(i).data.long);
+        pointarray.push(pointsarray.searchNodeAt(i).data.lat);
+        pointarray.push(pointsarray.searchNodeAt(i).data.alt);
+        
+        orientationarray.push(timeoffset);
+        //need to convert heading pitch and roll to quaternion
+        var quaternion = convert(pointsarray.searchNodeAt(i).data.heading,pointsarray.searchNodeAt(i).data.pitch,pointsarray.searchNodeAt(i).data.roll);
+        orientationarray.push(quaternion.x);
+        orientationarray.push(quaternion.y);
+        orientationarray.push(quaternion.z);
+        orientationarray.push(quaternion.w);
+
+
+    }
+	
+    czml[1].position.cartographicDegrees = pointarray;
+    
+    czml[1].orientation.unitQuaternion = orientationarray;
+    
+    //console.log(czml[1].orientation.unitQuaternion);
+
+   return czml;
+}
+
+var toggle = true;
+
+function preview(czml){
+/*
+	var rotationQuaternion = Cesium.Quaternion.fromHeadingPitchRoll(0, 5.19, 15.31);
+	var img = [{
+		"id" : "document",
+		"name" : "img Model",
+		"version" : "1.0"
+	}, {
+		"id" : "mars sample",
+		"position" : {
+			"cartographicDegrees" : [27.83998, 28.16131, 1]
+		},
+		"model": {
+			"gltf" : "../../SampleData/models/CesiumAir/2gltf/mars_sample.gltf",
+			"scale" : 100.0,
+			"minimumPixelSize": 128
+		}
+		,
+		"orientation":{
+			"unitQuaternion":[
+				rotationQuaternion.x, rotationQuaternion.y, rotationQuaternion.z, rotationQuaternion.w
+			]
+		}
+	}];
+	
+	var promise = viewer.dataSources.add(Cesium.CzmlDataSource.load(img));
+
+	promise.then(function(dataSource){
+		*/
+		viewer.dataSources.add(Cesium.CzmlDataSource.load(czml)).then(function(ds) {
+			//viewer.trackedEntity = ds.entities.getById('camera');
+			viewer.clock.onTick.addEventListener(function(clock) {
+				var currentTime = clock.currentTime;
+				if(typeof ds.entities.getById('camera').position.getValue(currentTime) !== "undefined"){
+					
+					if(toggle === true){
+					//console.log(ds.entities.getById('camera').position.getValue(currentTime));
+					
+					
+					
+					//var quaternionvalue = ds.entities.getById('camera').orientation.getValue(currentTime);
+					//console.log(quaternionvalue);
+					
+					var euler = Cesium.HeadingPitchRoll.fromQuaternion(ds.entities.getById('camera').orientation.getValue(currentTime));
+					//console.log((euler.heading/Math.PI) * 180 + "," + (euler.pitch/Math.PI) * 180 + "," + (euler.roll/Math.PI) * 180);
+					console.log(ds.entities.getById('camera').orientation.getValue(currentTime));
+					viewer.camera.setView({
+						destination : ds.entities.getById('camera').position.getValue(currentTime),
+						orientation : {
+							heading: euler.heading,
+							pitch: euler.pitch,
+							roll: euler.roll
+						}
+					});
+					}else if(toggle === false){
+						 viewer.trackedEntity = ds.entities.getById('camera');
+					}
+				}
+			});
+		});   
+	
+	/*
+	}).otherwise(function(error){
+		window.alert(error);
+	});*/
+}
+
+function reset(){
+    removePointsAndLines();
+    counter = 0;
+    pointsarray = new DoublyList();
+    viewer.entities.removeById('camera');
+}
+
+var jsonFile = [  
+   {  
+      "id":"document",
+      "name":"CZML Path",
+      "version":"1.0",
+      "clock":{  
+         "interval":"2012-08-04T10:00:00Z/2012-08-04T15:00:00Z",
+         "currentTime":"2012-08-04T10:00:00Z",
+         "multiplier":1
+      }
+   },
+   {  
+      "id":"camera",
+      "availability":"2012-08-04T10:00:00Z/2012-08-04T15:00:00Z",
+      "path":{  
+         "material":{  
+            "polylineOutline":{  
+               "color":{  
+                  "rgba":[  
+                     255,
+                     0,
+                     255,
+                     255
+                  ]
+               },
+               "outlineColor":{  
+                  "rgba":[  
+                     0,
+                     255,
+                     255,
+                     255
+                  ]
+               },
+               "outlineWidth":0
+            }
+         },
+         "width":0,
+         "leadTime":0,
+         "trailTime":0,
+         "resolution":0
+      },
+      "billboard":{  
+         "image":"data:image/png;base64,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",
+         "scale":1.5,
+         "eyeOffset":{  
+            "cartesian":[  
+               0,
+               0,
+               -10
+            ]
+         }
+      },
+      "position":{  
+         "epoch":"2012-08-04T10:00:00Z",
+         "cartographicDegrees":[  
+            0,
+            27.9174348287,
+            28.007042848,
+            40,
+            10,
+            27.9168533682,
+            90,
+            5
+         ]
+      },
+      "orientation":{  
+         "epoch":"2012-08-04T10:00:00Z",
+         "unitQuaternion":[  
+            0,
+            0,
+            0.7071067811865475,
+            0,
+            0.7071067811865476,
+            10,
+            0,
+            0.7071067811865475,
+            0,
+            0.7071067811865476
+         ]
+      }
+   }
+];
+
+function loadJson(jsonObject){
+    console.log(jsonObject[1].position.cartographicDegrees);
+    var positionArray = jsonObject[1].position.cartographicDegrees;
+    var orientationArray = jsonObject[1].orientation.unitQuaternion;
+    removePointsAndLines();
+    pointsarray = new DoublyList();
+    counter = 0;
+    //console.log(positionArray.length);
+    for(counter; counter < positionArray.length/4;counter++){
+        console.log(Number(counter*4) + " " + Number((counter*4)+1) + " " + Number((counter*4)+2) + " " + Number((counter*4)+3));
+        var quaternion = new Cesium.Quaternion(orientationArray[(counter*5)+1],orientationArray[(counter*5)+2],orientationArray[(counter*5)+3],orientationArray[(counter*5)+4]);
+        //console.log(quaternion);
+        var euler = Cesium.HeadingPitchRoll.fromQuaternion(quaternion);
+        //console.log((euler.heading/Math.PI)*180 + "," + (euler.pitch/Math.PI)*180 + "," +(euler.roll/Math.PI)*180);
+        var pointdata = {
+            long: positionArray[(counter*4)+1],
+            lat: positionArray[(counter*4)+2],
+            alt: positionArray[(counter*4)+3],
+            timeoffset: positionArray[(counter*4)],
+            heading: (euler.heading/Math.PI)*180,
+            pitch: (euler.pitch/Math.PI)*180,
+            roll: (euler.roll/Math.PI)*180
+        };
+        pointsarray.add(pointdata);
+    }
+    //console.log(pointsarray._length);
+    
+    //console.log(counter);
+    for(var i = 1;i<=pointsarray._length;i++){
+                viewer.entities.add({
+                    id: i.toFixed(1),
+                    position: Cesium.Cartesian3.fromDegrees(pointsarray.searchNodeAt(i).data.long, pointsarray.searchNodeAt(i).data.lat, pointsarray.searchNodeAt(i).data.alt),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.RED
+                    }
+                });
+                
+                createBillboardAndDescription(viewer.entities.getById(i.toFixed(1)));
+                
+                if (i >= 2) {
+                    drawLine(pointsarray.searchNodeAt(i-1).data, pointsarray.searchNodeAt(i).data, i);
+                }
+            }
+}
+
+function getSun(lon, lat, alt, et){
+	//var lon=29.001,lat=26.2121,alt=52.999,et='2012-08-04T10:00:00Z',
+	var planet = 'Mars';
+	lon = (lon + '').split('.').join('p');
+	lat = (lat + '').split('.').join('p');
+	alt = (alt + '').split('.').join('p');
+	//http://localhost:8281/SunData?lon=29p001&lat=26p2121&alt=52p999&et=2012-08-04T10:00:00Z&planet=Mars
+	var url = 'http://localhost:8281/SunData?lon='+lon+'&lat='+lat+'&alt='+alt+'&et='+et+'&planet='+planet;
+	//var x = 3.4;
+	//var newx = (x + '').split('.');
+	//console.log(newx.join('p'));
+	console.log(url);
+	$.getJSON(url, function(data) {
+		//data is the JSON string
+		//var json = JSON.parse(data);
+		console.log(data);
+	});
+}
+
+Sandcastle.addToolbarButton('Preview', function() {
+    toggle = true;
+    preview(create());
+});
+Sandcastle.addToolbarButton('Preview toggle', function() {
+    toggle = !toggle;
+});
+Sandcastle.addToolbarButton('Reset', function() {
+    reset();
+});
+Sandcastle.addToolbarButton('Load Json File', function() {
+    loadJson(jsonFile);
+});
+Sandcastle.addToolbarButton('Zoom to IMG', function() {
+    viewer.camera.flyTo({
+		destination: Cesium.Cartesian3.fromDegrees(27.9166084356, 28.0072931253, 2000)
+	});
+});
+Sandcastle.addToolbarButton('Load sun data', function() {
+    getSun(29.001, 26.2121, 52.999, '2012-08-04T10:00:00Z');
+});
+Sandcastle.addToolbarButton('Create Movie', function() {
+    $.ajax({ 
+        type:"POST",
+        contentType: "application/json",
+        url:"http://localhost:8281/getData",
+        data: JSON.stringify(create())
+    });
+});
+Sandcastle.addToolbarButton('img loc', function() {
+    viewer.entities.add({
+                    id: 'up left',
+                    position: Cesium.Cartesian3.fromDegrees(27.83998, 28.16131, 10000),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.RED
+                    }
+                });
+                
+				
+viewer.entities.add({
+                    id: 'low left',
+                    position: Cesium.Cartesian3.fromDegrees(27.83998, 27.85431, 10000),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.RED
+                    }
+                });
+                
+				
+viewer.entities.add({
+                    id: 'up right',
+                    position: Cesium.Cartesian3.fromDegrees(27.99169, 28.16131, 10000),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.RED
+                    }
+                });
+                
+				
+viewer.entities.add({
+                    id: 'low right',
+                    position: Cesium.Cartesian3.fromDegrees(27.99169, 27.85431, 10000),
+                    point: {
+                        pixelSize: 5,
+                        color: Cesium.Color.RED
+                    }
+                });
+                
+});
+
+
+//Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== "undefined") {
+    startup(Cesium);
+} else if (typeof require === "function") {
+    require(["Cesium"], startup);
+}
+</script>
+</body>
+</html>
