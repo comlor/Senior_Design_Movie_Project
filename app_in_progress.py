@@ -1,13 +1,21 @@
-from bottle import get, post, run, route, request, response, hook
-import subprocess
+from bottle import get, post, run, route, request, response, hook, abort, put
 import spiceypy as spy
+import random
 import json
+import string
 import os
-import sys
-import io
-import time
-import program_driver
+from pymongo import MongoClient
+from bson import BSON
+from bson import json_util
+from bson.objectid import ObjectId
+import smtplib
+from email.mime.text import MIMEText
+import subprocess
+from CzmlParser import CZML_Parser
 
+connection = MongoClient('localhost', 27017)
+db = connection['documents']
+posts = db.posts
 
 @route('/<:re:.*>', method='OPTIONS')
 def enable_cors_generic_route():
@@ -145,15 +153,96 @@ def SunData():
     dataString = sun.sunData()
     return dataString
 
+def base_str():
+    return string.ascii_lowercase + string.ascii_uppercase + string.digits
+
+
+def key_gen(KEY_LEN=20):
+    keylist = [random.choice(base_str()) for i in range(KEY_LEN)]
+    return "".join(keylist)
+
 @post('/getData')
 def getData():
     json_text = request.json
-    #print(json_text)
-    with open("/home/chrisomlor/MovieDemo/Assets/liveJson.JSON", 'w') as outfile:
-        json.dump(json_text, outfile)
+    print("**************************************************************")
+    print(json_text)
+    print("**************************************************************")
+    json_str = json.dumps(json_text)
+    print(json_str)
+    print("***************************************************************")
+    temp = json.loads(json_str)
+    email = temp["email"]
+    check_availablity(key_gen(20), email, json_text)
 
-    alt = "python3 /home/chrisomlor/MovieDemo/program_driver.py /home/chrisomlor/MovieDemo/Assets/liveJson.JSON"
-    sub = subprocess.Popen([alt], shell=True)
+    #alt = "python3 /home/chrisomlor/MovieDemo/program_driver.py /home/chrisomlor/MovieDemo/Assets/liveJson.JSON"
+    #sub = subprocess.Popen([alt], shell=True)
 
+
+@get('/temp')
+def doTemp():
+    randomid = key_gen(20)
+    print(randomid)
+    check_availablity(randomid, "fake@gmail.com")
+
+
+def check_availablity(randomid, email, json_text):
+    entity = posts.find_one({'vid': randomid})
+    print(entity)
+    if not entity:
+        # TODO: EDIT PATH ON LINUX SYSTEM
+        mypath = '/home/chrisomlor/MovieDemo/jobs/' + str(randomid)
+        if not os.path.isdir(mypath):
+            os.makedirs(mypath)
+        try:
+            abspath = "/home/chrisomlor/MovieDemo/output/" + randomid
+            posts.insert_one({'vid': randomid, 'email': email, 'path': mypath, 'output': abspath})
+            with open(mypath + "Assets/liveJson.JSON", 'w') as outfile:
+                json.dump(json_text, outfile)
+
+            alt = "python3 /home/chrisomlor/MovieDemo/program_driver.py /home/chrisomlor/MovieDemo/Assets/liveJson.JSON "
+            alt += mypath
+            alt += " "
+            alt += abspath
+            alt += " "
+            alt += randomid
+            sub = subprocess.Popen([alt], shell=True)
+
+        except RuntimeError:
+            pass
+    else:
+        check_availablity(key_gen(20), email, json_text)
+
+# SEND THE MOVIE NAME HERE
+@post('/completed')
+def sendEmail():
+    postdata = request.body.read()
+    print(postdata)
+    entity = json.loads(posts.find_one({'vid': postdata}))
+    if not entity:
+        abort(404,"No such video")
+    else:
+        temp = json.dumps(entity, sort_keys=True, indent=4, default=json_util.default)
+        temp1 = json.loads(temp)
+        to = temp1["email"]
+        text = temp1["output"]
+        sendMail('temp@gmail.com', to, 'Your Movie from MarsTrek has completed!', text, 'smtp.gmail.com')
+
+
+def sendMail(FROM, TO, SUBJECT, TEXT, SERVER):
+    import smtplib
+    """this is some test documentation in the function"""
+    message = """\
+        From: %s
+        To: %s
+        Subject: %s
+        %s
+        """ % (FROM, ", ".join(TO), SUBJECT, TEXT)
+    # Send the mail
+    server = smtplib.SMTP(SERVER)
+    "New part"
+    server.starttls()
+    server.login('username', 'password')
+    server.sendmail(FROM, TO, message)
+    server.quit()
 
 run(host='localhost', port=8281, debug=True)

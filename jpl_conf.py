@@ -37,7 +37,10 @@ class FilePaths:
         return os.path.join(self.__abs_assets_dir, self.__file_name)
 
     def get_texture_file(self):
-        return os.path.join(self.__abs_assets_dir, self.__texture_name)
+        if self.__texture_name is not None:
+            return os.path.join(self.__abs_assets_dir, self.__texture_name)
+        else:
+            return None
 
     def get_abs_path_project(self):
         return self.__abs_project_dir
@@ -71,6 +74,9 @@ class FilePaths:
 
     def get_IMG_binmode(self):
         return self.__IMG_binmode
+
+    def get_frame_count(self):
+        return bpy.data.scenes["Scene"].frame_end
 
 
 class Blender_Config_Options:

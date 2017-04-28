@@ -2,7 +2,7 @@ import bpy
 #from osgeo import gdal, osr
 #import random
 #import mathutils
-#import math
+import math
 #import numpy
 
 
@@ -22,6 +22,7 @@ class BuildScene:
         self.__user_points = user_selections[0]
 
         # Camera rotations where index corresponds to same index from user_points
+        # list positions [time_offset, x, y, z, w]
         self.__camera_orientation = user_selections[1]
 
         # Lighting Orientations
@@ -48,7 +49,7 @@ class BuildScene:
         # Get user selected point into list converted to pixel coordinates in blender
         verts = []
         for pt in self.__user_points:
-            verts.append(self.geo_2_pix(pt[1], pt[2], pt[3]))
+            verts.append(self.geo_2_pix(float(pt[1]), float(pt[2]), float(pt[3])))
 
         # Create a new curve in 3D
         self.__curve_data = bpy.data.curves.new('Camera_Path', type='CURVE')
@@ -57,7 +58,7 @@ class BuildScene:
 
         # Set the path duration to the number of frames of the last time offset multiplied by the
         # number of frames per second of the animation.
-        self.__curve_data.path_duration = self.__user_points[self.__num_points - 1][0] * 24
+        self.__curve_data.path_duration = float(self.__user_points[self.__num_points - 1][0]) * 24
 
         self.__polyline = self.__curve_data.splines.new('POLY')
         self.__polyline.points.add(len(verts)-1)
@@ -66,7 +67,7 @@ class BuildScene:
             self.__polyline.points[n].co = (x, y, z, 1)
 
         self.__camera_path = bpy.data.objects.new('PATH', self.__curve_data)
-        self.__scene.frame_end = self.__user_points[self.__num_points - 1][0] * 24
+        self.__scene.frame_end = float(self.__user_points[self.__num_points - 1][0]) * 24
         self.__curve_object = bpy.data.objects['PATH']
 
     # Create a camera object and place on scene in the starting location of the animation based on user
@@ -74,16 +75,50 @@ class BuildScene:
     def make_camera(self):
         bpy.ops.object.select_all(action='DESELECT')
 
-        # Create a new Camera Object on the scene
-        new_camera = bpy.data.cameras.new("MyCamera")
-        self.__camera_object = bpy.data.objects.new("MyCamera", new_camera)
+        cxt = [x for x in bpy.context.screen.areas if x.type == 'VIEW_3D']
 
-        # Set the orientation of the camera to the first rotation values from the data created by user
-        self.__camera_object.rotation_mode = 'QUATERNION'
-        self.__camera_object.rotation_quaternion = (self.__camera_orientation[0][0],
-                                                    self.__camera_orientation[0][1],
-                                                    self.__camera_orientation[0][2],
-                                                    self.__camera_orientation[0][3])
+        if cxt:
+            for v in cxt:
+                v.spaces[0].transform_orientation = 'GIMBAL'
+
+        # Create Empty for translating cesium camera rotations in blender
+        cesium = bpy.data.objects.new( "cesium", None )
+        bpy.context.scene.objects.link(cesium)
+        cesium.empty_draw_type = 'CUBE'
+        cesium.location = self.geo_2_pix(float(self.__user_points[0][1]), float(self.__user_points[0][2]), float(self.__user_points[0][3]))
+
+        # Create Empty that is child of cesium empty.  This will handle the pitch and heading rotations
+        # Rotations occur on the blender x, y axis
+        pitch_heading = bpy.data.objects.new( "pitch_heading", None)
+        bpy.context.scene.objects.link(pitch_heading)
+        cesium.empty_draw_type = 'CUBE'
+        cesium.location = self.geo_2_pix(float(self.__user_points[0][1]), float(self.__user_points[0][2]), float(self.__user_points[0][3]))
+        pitch_heading.parent = cesium
+
+        # Create the main camera that is child of pitch_heading empty.  The pitch and heading rotations are
+        # handled by the parent empty.  The only rotation on this object is the roll on blenders z axis
+        new_camera = bpy.data.cameras.new("MyCamera")
+        my_camera = bpy.data.objects.new("MyCamera", new_camera)
+        bpy.context.scene.objects.link(my_camera)
+        my_camera.parent = pitch_heading
+
+        cesium.rotation_mode = 'XYZ'
+        cesium.rotation_euler = (90 * math.pi/180, 0, 0)
+        cesium.lock_rotation[0] = True
+        cesium.lock_rotation[1] = True
+        cesium.lock_rotation[2] = True
+
+        pitch_heading.rotation_mode = 'XYZ'
+        pitch_heading.rotation_euler = (self.__camera_orientation[0][1] * (math.pi / 180), -1 * self.__camera_orientation[0][3] * (math.pi / 180), 0)
+        pitch_heading.lock_rotation[2] = True
+
+        my_camera.lock_rotation[0] = True
+        my_camera.lock_rotation[1] = True
+        my_camera.rotation_mode = 'ZYX'
+        my_camera.rotation_euler = (0, 0, self.__camera_orientation[0][2] * ( math.pi / 180 ))
+        my_camera.location = (0, 0, 0)
+
+        self.__camera_object = cesium
 
         self.__camera_object.select = True
 
@@ -95,17 +130,17 @@ class BuildScene:
 
     # Make the camera object a chile of the camera path object so the follow path constraint
     # makes camera follow along the path when animated.
-    def link_camera_path(self):
-        self.__scene.objects.link(self.__camera_path)
-        self.__scene.objects.active = self.__camera_path
-        self.__camera_path.select = True
+    #def link_camera_path(self):
+    #    #self.__scene.objects.link(self.__camera_path)
+    #    self.__scene.objects.active = self.__camera_path
+    #    self.__camera_path.select = True
 
-        self.__scene.objects.link(self.__camera_object)
+    #    self.__scene.objects.link(self.__camera_object)
 
-        start_loc = self.geo_2_pix(self.__user_points[0][1], self.__user_points[0][2], self.__user_points[0][3])
-        self.__camera_object.location = start_loc
+    #   start_loc = self.geo_2_pix(float(self.__user_points[0][1]), float(self.__user_points[0][2]), float(self.__user_points[0][3]))
+    #    self.__camera_object.location = start_loc
 
-        self.__camera_object.select = True
+    #    self.__camera_object.select = True
 
     # Using key frames and linear interpolation to set the timing between each user defined point
     # of the camera path
@@ -113,7 +148,7 @@ class BuildScene:
         # Convert each user selected value to pixel coordinates in blender as a new list
         verts = []
         for pt in self.__user_points:
-            verts.append(self.geo_2_pix(pt[1], pt[2], pt[3]))
+            verts.append(self.geo_2_pix(float(pt[1]), float(pt[2]), float(pt[3])))
 
         # Camera must be only active object or animation will not run properly.
         bpy.ops.object.select_all(action='DESELECT')
@@ -127,7 +162,7 @@ class BuildScene:
         previous_frame = self.__user_points[0]
         current_frame_num = 0
         for point in range(num_points):
-            current_frame_num += (self.__user_points[point][0] - previous_frame[0]) * 24 + 1
+            current_frame_num += (float(self.__user_points[point][0]) - float(previous_frame[0])) * 24 + 1
             self.__camera_object.location = verts[point]
             self.__camera_object.keyframe_insert(data_path="location", frame=current_frame_num)
             previous_frame = self.__user_points[point]
@@ -196,7 +231,7 @@ class BuildScene:
         # Create a new light source object as a sun
         lamp_data = bpy.data.lamps.new(name="Sun", type='SUN')
         lamp_data.use_nodes = True
-        bpy.data.lamps["Sun"].node_tree.nodes["Emission"].inputs[1].default_value = 3.0
+        bpy.data.lamps["Sun"].node_tree.nodes["Emission"].inputs[1].default_value = 4.31 # Scientific approx 0.431 w/m^2
 
         # Create new object with our lamp datablock
         lamp_object = bpy.data.objects.new(name="Sun", object_data=lamp_data)
@@ -220,6 +255,10 @@ class BuildScene:
     # transition point and interpolating the rotation values to create a smooth rotational transition of
     # the cameras orientation
     def set_camera_orientation(self):
+        self.key_frame_pitch()
+        self.key_frame_roll()
+
+    def key_frame_roll(self):
         scene = bpy.context.scene
         scene.objects.active = bpy.data.objects['MyCamera']
 
@@ -231,32 +270,92 @@ class BuildScene:
         # Create camera object from our currently selected camera
         camera_object = bpy.context.active_object
 
+
         # Get a list of the time offsets from the user selected data
         time_offsets = []
         for item in self.__user_points:
-            time_offsets.append(item[0])
+            time_offsets.append(float(item[0]))
+        print("************************************************************")
+        print(time_offsets)
 
         # For every time offset we create a key frame on the camera object 10 frames before and after each offset
         # so that the camera makes a smooth transition to the new rotation values.
-        for index in range(len(time_offsets)):
+        num_points = len(time_offsets)
+        previous_frame = self.__camera_orientation[0]
+        current_frame_num = 0
+        for index in range(num_points):
+            current_frame_num += (float(self.__camera_orientation[index][0]) - float(previous_frame[0])) * 24 + 1
+            camera_object.rotation_euler = (0, 0, self.__camera_orientation[index][2] * (math.pi / 180))
+            camera_object.keyframe_insert(data_path="rotation_euler", frame=current_frame_num)
+            previous_frame = self.__user_points[index]
+
+        '''
+        for index in (range(len(time_offsets) - 1)):
             frame = time_offsets[index] * 24
 
             if(frame == 0) or (frame == self.__blender_options.get_end_frame()):
                 continue
             else:
-                bpy.context.scene.frame_set(frame-10) # Need to change so finishes 1 frame before the offset
-                camera_object.rotation_quaternion = (self.__camera_orientation[index-1][1],
-                                                     self.__camera_orientation[index-1][2],
-                                                     self.__camera_orientation[index-1][3],
-                                                     self.__camera_orientation[index-1][4])
-                camera_object.keyframe_insert(data_path='rotation_quaternion')
+                #bpy.context.scene.frame_set(frame-10) # Need to change so finishes 1 frame before the offset
+                bpy.context.scene.frame_set(frame)
+                scene.objects.active = bpy.data.objects['MyCamera']
+                camera_object.rotation_euler = (0, 0, self.__camera_orientation[index][2] * (math.pi/180))
+                camera_object.keyframe_insert(data_path='rotation_euler')
+                #bpy.context.scene.frame_set(frame+10)
+                bpy.context.scene.frame_set(frame + (time_offsets[index + 1] * 24 - 1))
+                camera_object.rotation_euler = (0, 0, self.__camera_orientation[index + 1][2] * (math.pi/180))
+                camera_object.keyframe_insert(data_path='rotation_euler')
+        '''
 
-                bpy.context.scene.frame_set(frame+10)
-                camera_object.rotation_quaternion = (self.__camera_orientation[index][1],
-                                                     self.__camera_orientation[index][2],
-                                                     self.__camera_orientation[index][3],
-                                                     self.__camera_orientation[index][4])
-                camera_object.keyframe_insert(data_path='rotation_quaternion')
+    def key_frame_pitch(self):
+        scene = bpy.context.scene
+        scene.objects.active = bpy.data.objects['pitch_heading']
+
+        # Deselect All objects.  only camera can be selected for this
+        bpy.ops.object.select_all(action='DESELECT')
+        pitch = bpy.data.objects['pitch_heading']
+        pitch.select = True
+
+        # Create camera object from our currently selected camera
+        pitch_object = bpy.context.active_object
+
+
+        # Get a list of the time offsets from the user selected data
+        time_offsets = []
+        for item in self.__user_points:
+            time_offsets.append(float(item[0]))
+
+        # For every time offset we create a key frame on the camera object 10 frames before and after each offset
+        # so that the camera makes a smooth transition to the new rotation values.
+        num_points = len(time_offsets)
+        previous_frame = self.__camera_orientation[0]
+        current_frame_num = 0
+        for index in range(num_points):
+            current_frame_num += (float(self.__camera_orientation[index][0]) - float(previous_frame[0])) * 24 + 1
+            pitch_object.rotation_euler = (self.__camera_orientation[index][1] * (math.pi / 180),
+                                           -1 * self.__camera_orientation[index][3] * (math.pi / 180), 0)
+            pitch_object.keyframe_insert(data_path="rotation_euler", frame=current_frame_num)
+            previous_frame = self.__user_points[index]
+
+        '''
+        for index in range(len(time_offsets)-1):
+            frame = time_offsets[index] * 24
+
+            if(frame == 0) or (frame == self.__blender_options.get_end_frame()):
+                continue
+            else:
+                #bpy.context.scene.frame_set(frame - 10)
+                bpy.context.scene.frame_set(frame)
+                scene.objects.active = bpy.data.objects['pitch_heading']
+                pitch_object.rotation_euler = (self.__camera_orientation[index - 1][1] * (math.pi / 180),
+                                               -1 *self.__camera_orientation[index - 1][3] * (math.pi / 180), 0)
+                pitch_object.keyframe_insert(data_path='rotation_euler')
+                #bpy.context.scene.frame_set(frame + 10)
+                bpy.context.scene.frame_set(frame + (time_offsets[index+1] * 24 - 1))
+                pitch_object.rotation_euler = (self.__camera_orientation[index][1] * (math.pi / 180),
+                                               -1 * self.__camera_orientation[index][3] * (math.pi / 180), 0)
+                pitch_object.keyframe_insert(data_path='rotation_euler')
+        '''
 
     # Set the blender options of the Blender Internal Render Engine.  The values of these settings can be set
     # in the jpl_conf.py file.
@@ -307,7 +406,6 @@ class BuildScene:
     def set_cycles_options(self):
         # Set Render Engine to Cycles
         bpy.data.scenes["Scene"].render.engine = self.__blender_options.get_render_engine()
-
         bpy.data.scenes["Scene"].view_settings.view_transform = self.__blender_options.get_view_render_color()
 
         # Rendering Resolution
@@ -341,9 +439,7 @@ class BuildScene:
         bpy.data.scenes["Scene"].render.simplify_subdivision_render = 1
         bpy.data.scenes["Scene"].cycles.use_camera_cull = True
 
-        #bpy.data.scenes["terrain"].cycles.use_camera_cull = True
-
-
+        #lighting
         bpy.data.lamps["Sun"].shadow_soft_size = self.__blender_options.get_shadow_soft_size()
         bpy.data.lamps["Sun"].cycles.max_bounces = 16
         bpy.data.lamps["Sun"].cycles.cast_shadow = False

@@ -1,6 +1,7 @@
 import json
 import os
-#file = 'C:\\Users\\Angel Jimenez\\Documents\\Senior Design\\sample.json'
+
+file = 'sample_json.json'
 
 class CZML_Parser:
 
@@ -85,8 +86,8 @@ class CZML_Parser:
 
     def blenderCamera(self):
         '''
-        param path: the file path
-        type path: str
+        param path: 
+        type path: 
         return: Position(timeOffset,long,lat,alt) groups by point
                 Orientation-()groups by point
         rtype: list of postions and orientations
@@ -96,8 +97,44 @@ class CZML_Parser:
         p = self.position()
 
         finalPosition = [p[x:x+4] for x in range(0, len(p), 4)]
-        finalOrientation = [o[x:x+5] for x in range(0, len(o), 5)]
+        finalOrientation = [o[x:x+4] for x in range(0, len(o), 4)]
 
         temp = (finalPosition, finalOrientation)
 
         return temp
+    
+    def email(self):
+        '''
+        param path: 
+        type path: 
+        return: Position(timeOffset,long,lat,alt) groups by point
+                Orientation-()groups by point
+        rtype: list of postions and orientations
+        '''
+        json_data = self.open_file()
+
+        email =  json_data[2]["email"]
+        return email
+    
+    def sundata(self):
+        '''
+        param path: the file path
+        type path: str
+        return: Position(timeOffset,long,lat,alt) groups by point
+            Orientation-()groups by point
+        rtype: list of postions and orientations
+        '''
+        json_data = self.open_file()
+
+        sun =  json_data[2]["sunData"]#need to find exact key names
+    
+        return sun
+    
+def main():
+    json = CZML_Parser(file)
+    
+    print(json.sundata())
+    print(json.email())
+
+if __name__ == '__main__':
+     main()

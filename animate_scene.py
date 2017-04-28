@@ -1,5 +1,6 @@
 import bpy
 import os
+import sys
 import re
 import glob
 from jpl_conf import FilePaths
@@ -7,17 +8,17 @@ from jpl_conf import FilePaths
 
 class AnimateScene:
 
-    def __init__(self, path):
-        self.path = path
+    def __init__(self, file_dir, output_dir):
+        #self.path = path
 
         # Directory where rendered stills are located
-        self.in_dir = "./temp"
+        self.in_dir = file_dir
 
         # Get list of frames from directory
         self.lst = os.listdir(self.in_dir)
 
         # Set output directory to save final video
-        self.out_dir = "./"
+        self.out_dir = output_dir
 
         #bpy.data.scenes["Scene"].render.resolution_x = self.path.render_res_x
         #bpy.data.scenes["Scene"].render.resolution_y = self.path.render_res_y
@@ -55,7 +56,7 @@ class AnimateScene:
                                               filter_text=False,
                                               filter_btx=False, filter_collada=False,
                                               filter_folder=True, filemode=9, relative_path=False, frame_start=0,
-                                              frame_end=n - 1,
+                                              frame_end=n - 1,  sort_method='FILE_SORT_ALPHA',
                                               channel=1, replace_sel=True, files=file)
         # (directory=in_dir, files=file, channel=1, frame_start=0, frame_end=n - 1)
 
@@ -69,3 +70,13 @@ class AnimateScene:
         stripname = file[0].get("name");
         print(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname])
         print(dir(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname]))
+
+def main():
+    print(sys.argv)
+    image_path = sys.argv[5]
+    output_path = sys.argv[6]
+    animater = AnimateScene(image_path, output_path)
+    animater.animate()
+
+if __name__ == "__main__":
+    main()

@@ -2,7 +2,7 @@ from jpl_conf import FilePaths
 from jpl_conf import Blender_Config_Options
 from create_blend import Importer
 from create_scene import BuildScene
-from render_scene import RenderStills
+#from render_scene import RenderStills
 from animate_scene import AnimateScene
 from osgeo import gdal, osr
 from CzmlParser import CZML_Parser
@@ -75,7 +75,7 @@ def do_import(in_obj, blend_config, user_points):
 def do_create_scene(scene):
     scene.camera_path()
     scene.make_camera()
-    scene.link_camera_path()
+    #scene.link_camera_path()
     scene.create_lamp()
     scene.key_frame_camera()
 
@@ -83,20 +83,34 @@ def do_create_scene(scene):
     #scene.create_camera_path()
     #scene.create_camera()
     #scene.bind_camera_path()
+
     scene.set_camera_orientation()
+
     #scene.set_render_options()
     #scene.set_lighting_options()
     scene.set_cycles_options()
 
 @timing
-def do_render(render):
-    render.render_stills()
+def do_render(path, split):
+    f = open("/home/chrisomlor/MovieDemo/hadoop/input/input.txt",'w')
+    frame_count = path.get_frame_count()
+    start = end = 1
+    job_num = 0
+    while end <= frame_count:
+        end = start + 59
+        split.create_job(start, end, path.get_abs_path_project(), job_num, 'terrain', path.get_blend_file())
+        f.write(str(start) + " " + str(end) + " ")
+        if end == frame_count:
+            end = 999
+        start = end + 1
+        job_num += 1
+    f.close()
 
 @timing
 def do_animate(animater):
     animater.animate()
 
-def main():
+def main(json=None):
     # Testing data for camera positioning
     #points = [[0, 27.83998, 28.16131, 200.0000], [10, 27.9000, 28.0000, 5000.0000], [20, 27.99168, 27.85431, 750]]
     #cam = [[11.415, -10.087, -59.376, -111.546], [90.0, -25.0, -65.0, -100.0], [90.0, -25, -65, -100]]
@@ -106,14 +120,21 @@ def main():
     light_ori = [[0, 1.000, -0.300, 0.000, 0.000], [30, 0.750, 0.640, 0.000, 0.000]]
     light_pos = [[0, -8.000, -123.000, 75.000], [60, -8.000, -123.000, 75.000]]
 
-    print("argv: " + sys.argv[7])
-    print("------------------------------------------------------------------------------------------")
-    json_parse = CZML_Parser(sys.argv[7])
+    #print(sys.argv)
+    #print("argv: " + sys.argv[5])
+    #print("------------------------------------------------------------------------------------------")
+    json_parse = CZML_Parser(sys.argv[5])
+    #json_parse = CZML_Parser(json)
 
     point, angle = json_parse.blenderCamera()
+    sun_data = json_parse.sundata()
 
-    print(point)
-    print(angle)
+
+
+    #print(point)
+    #print(angle)
+    #print("-----Sun Data-----")
+    #print(sun_data)
 
     out_file = 'my_test.blend'
     in_file = 'my_image.IMG'
@@ -128,7 +149,7 @@ def main():
 
     user_points_converted = []
     for pt in point:
-        convert = my_scene.geo_2_pix(pt[1], pt[2], pt[3])
+        convert = my_scene.geo_2_pix(float(pt[1]), float(pt[2]), float(pt[3]))
         user_points_converted.append(convert)
 
     # Execute Class Functions
@@ -138,12 +159,14 @@ def main():
     # Save all the options into a blend file
     my_importer.save_scene(out_file)
 
-    render = RenderStills(blend_config, file_path)
-    do_render(render)
+    do_render(file_path, my_importer)
 
-    animater = AnimateScene(file_path)
-    do_animate(animater)
-
+    #out_file = 'my_test.blend'
+    #in_file = 'my_image.IMG'
+    #text_file = 'texture_sb.jpg'
+    #file_path = FilePaths(in_file, out_file, text_file)
+    #animater = AnimateScene(file_path)
+    #do_animate(animater)
 
 if __name__ == "__main__":
     main()
