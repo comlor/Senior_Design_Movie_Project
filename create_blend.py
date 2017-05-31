@@ -108,7 +108,7 @@ class Importer:
             links.new(text_coord.outputs['Generated'], shtext.inputs['Vector'])
         else:
             print("NO TEXTURE IMAGE --> SET COLOR")
-            color = [0.799, 0.205, 0.006, 1.0]
+            color = [0.800, 0.300, 0.017, 1.0]
             shader.inputs["Color"].default_value = color
 
     # Deselects the object by name that was just imported
@@ -119,10 +119,10 @@ class Importer:
 
     # Save the blend file with the new imported mesh
     def save_scene(self, file_name):
-        self.__file_path.set_blend_file_name(file_name)
-        save_loc = self.__file_path.get_abs_path_assets()
+        save_loc = self.__file_path.get_cur_working_dir() + "/assets/"
         save_file = self.__file_path.get_blend_file()
-        save = os.path.join(save_loc, save_file)
+        save = save_loc + save_file
+        print(str(save))
         bpy.ops.wm.save_as_mainfile(filepath=save)
 
     def returnObjectByName(self, passedName=""):
@@ -308,13 +308,14 @@ class Importer:
         scene = bpy.context.scene
         print("Debug>" + str(start_frame) + " " + str(end_frame))
         for i in range(start_frame, end_frame):
-            print("Debug>" + str(i))
-            scene.frame_set(i)
-            current = self.is_visible(terrain)
-            s = s + current
-            end_frame += 1;
-            s = list(set(s))
-            print("Visible Chunks: " + str(s) + "\nVisible Chunk Count:" + str(len(s)))
+            if i % 10 is 0:
+                print("Debug>" + str(i))
+                scene.frame_set(i)
+                current = self.is_visible(terrain)
+                s = s + current
+                end_frame += 1;
+                s = list(set(s))
+                print("Visible Chunks: " + str(s) + "\nVisible Chunk Count:" + str(len(s)))
         return list(set(s))
 
     def set_cycles_options(self):
@@ -367,25 +368,25 @@ class Importer:
         bpy.data.scenes["Scene"].frame_start = int(start_frame)
 
     def save_new_scene_file(self, file_path, job_num):
-        save_loc = file_path
-        save_file = "job_"
+        save_file = 'job_'
         save_file += str(job_num)
-        save_file += ".blend"
-        print("SAVE FILE: ", str(save_file))
-        save = os.path.join(save_loc, save_file)
+        save_file += '.blend'
+        save = file_path + save_file
+        print("SAVE FILE: ", str(save))
         bpy.ops.wm.save_as_mainfile(filepath=save)
-        return None
+        return save_file
 
     def create_job(self, start_frame=0, end_frame=0, file_path="", job_num=0, terrain="", active_file=""):
         self.set_start_frame(start_frame)
         self.set_end_frame(end_frame)
-        self.split_terrain(2, terrain)
+        #self.split_terrain(2, terrain)
         terrains = self.get_Visible(start_frame, end_frame, terrain)
         self.delete_terrain(terrain, terrains)
         self.combine_terrain(terrain)
-        self.save_new_scene_file(file_path, job_num)
+        save_file = self.save_new_scene_file(file_path, job_num)
         save = os.path.join(file_path, active_file)
         bpy.ops.wm.open_mainfile(filepath=save)
+        return save_file
 
     def delete_terrain(self, terrain="", terrains=[]):
         unused = []

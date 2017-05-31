@@ -26,6 +26,7 @@ class BuildScene:
         self.__camera_orientation = user_selections[1]
 
         # Lighting Orientations
+        # (zenith, azimuth)
         self.__light_orientation = user_selections[2]
 
         # Lighting Position
@@ -177,7 +178,9 @@ class BuildScene:
 
     # Sets the end_frame inside blender and saves information in blender configuration
     # class variable for rendering tasks to use
-    def set_end_frame(self, end_frame):
+    def set_end_frame(self):
+        scene = bpy.context.scene
+        end_frame = scene.frame_end
         # Update the end_frame variable in jpl_conf.py for use in other classes
         self.__blender_options.set_end_frame(end_frame)
 
@@ -228,28 +231,37 @@ class BuildScene:
     # Creates a sun lamp.
     # Not scientifically accurate yet
     def create_lamp(self):
-        # Create a new light source object as a sun
-        lamp_data = bpy.data.lamps.new(name="Sun", type='SUN')
+        bpy.ops.object.select_all(action='DESELECT')
+
+        # Create Empty for setting sun default orientation to north azimuth = 0 deg, zenith = 0 deg parallel to surface
+        sun_def = bpy.data.objects.new("sun_default", None)
+        bpy.context.scene.objects.link(sun_def)
+        sun_def.empty_draw_type = 'CUBE'
+        sun_def.location = self.__light_position[0], self.__light_position[1], self.__light_position[2]
+
+        # Create the sun object as a child of the empty.
+        lamp_data = bpy.data.lamps.new(name="MySun", type='SUN')
+        my_sun = bpy.data.objects.new("MySun", lamp_data)
+        bpy.context.scene.objects.link(my_sun)
+        my_sun.parent = sun_def
+
+        sun_def.rotation_mode = 'XYZ'
+        sun_def.rotation_euler = (90 * math.pi/180, 0, 0)
+        sun_def.lock_rotation[0] = True
+        sun_def.lock_rotation[1] = True
+        sun_def.lock_rotation[2] = True
+
+        my_sun.lock_rotation[2] = True
+        my_sun.rotation_mode = 'XZY'
+        print("Sun X_rot: " + str(self.__light_orientation[0] * (180 / math.pi) * -1))
+        print("Sun Y_rot: " + str(self.__light_orientation[1] * (180 / math.pi) + 180))
+        print("Sun Z_rot: " + str(0))
+        my_sun.rotation_euler = (self.__light_orientation[0] * -1, self.__light_orientation[1] + math.pi, 0)
+        my_sun.location = (0, 0, 0)
+
         lamp_data.use_nodes = True
-        bpy.data.lamps["Sun"].node_tree.nodes["Emission"].inputs[1].default_value = 4.31 # Scientific approx 0.431 w/m^2
+        bpy.data.lamps["MySun"].node_tree.nodes["Emission"].inputs[1].default_value = 4.31  # Scientific approx 0.431 w/m^2
 
-        # Create new object with our lamp datablock
-        lamp_object = bpy.data.objects.new(name="Sun", object_data=lamp_data)
-
-        # Link lamp object to the scene so it'll appear in this scene
-        self.__scene.objects.link(lamp_object)
-
-        # Place lamp to a specified location
-        lamp_object.location = (self.__light_position[0][1],
-                                self.__light_position[0][2],
-                                self.__light_position[0][3])
-
-        # Set the rotation of the lamp
-        lamp_object.rotation_mode = 'QUATERNION'
-        lamp_object.rotation_quaternion = (self.__light_orientation[0][1],
-                                           self.__light_orientation[0][2],
-                                           self.__light_orientation[0][3],
-                                           self.__light_orientation[0][4])
 
     # Create camera rotations during animation by setting key frames a few frames before and after the
     # transition point and interpolating the rotation values to create a smooth rotational transition of
@@ -289,23 +301,6 @@ class BuildScene:
             camera_object.keyframe_insert(data_path="rotation_euler", frame=current_frame_num)
             previous_frame = self.__user_points[index]
 
-        '''
-        for index in (range(len(time_offsets) - 1)):
-            frame = time_offsets[index] * 24
-
-            if(frame == 0) or (frame == self.__blender_options.get_end_frame()):
-                continue
-            else:
-                #bpy.context.scene.frame_set(frame-10) # Need to change so finishes 1 frame before the offset
-                bpy.context.scene.frame_set(frame)
-                scene.objects.active = bpy.data.objects['MyCamera']
-                camera_object.rotation_euler = (0, 0, self.__camera_orientation[index][2] * (math.pi/180))
-                camera_object.keyframe_insert(data_path='rotation_euler')
-                #bpy.context.scene.frame_set(frame+10)
-                bpy.context.scene.frame_set(frame + (time_offsets[index + 1] * 24 - 1))
-                camera_object.rotation_euler = (0, 0, self.__camera_orientation[index + 1][2] * (math.pi/180))
-                camera_object.keyframe_insert(data_path='rotation_euler')
-        '''
 
     def key_frame_pitch(self):
         scene = bpy.context.scene
@@ -337,25 +332,6 @@ class BuildScene:
             pitch_object.keyframe_insert(data_path="rotation_euler", frame=current_frame_num)
             previous_frame = self.__user_points[index]
 
-        '''
-        for index in range(len(time_offsets)-1):
-            frame = time_offsets[index] * 24
-
-            if(frame == 0) or (frame == self.__blender_options.get_end_frame()):
-                continue
-            else:
-                #bpy.context.scene.frame_set(frame - 10)
-                bpy.context.scene.frame_set(frame)
-                scene.objects.active = bpy.data.objects['pitch_heading']
-                pitch_object.rotation_euler = (self.__camera_orientation[index - 1][1] * (math.pi / 180),
-                                               -1 *self.__camera_orientation[index - 1][3] * (math.pi / 180), 0)
-                pitch_object.keyframe_insert(data_path='rotation_euler')
-                #bpy.context.scene.frame_set(frame + 10)
-                bpy.context.scene.frame_set(frame + (time_offsets[index+1] * 24 - 1))
-                pitch_object.rotation_euler = (self.__camera_orientation[index][1] * (math.pi / 180),
-                                               -1 * self.__camera_orientation[index][3] * (math.pi / 180), 0)
-                pitch_object.keyframe_insert(data_path='rotation_euler')
-        '''
 
     # Set the blender options of the Blender Internal Render Engine.  The values of these settings can be set
     # in the jpl_conf.py file.
@@ -397,11 +373,11 @@ class BuildScene:
     # in the jpl_conf.py file.
     def set_lighting_options(self):
         # Set Lighting Options
-        bpy.data.lamps["Sun"].shadow_method = self.__blender_options.get_shadow_method()
-        bpy.data.lamps["Sun"].shadow_soft_size = self.__blender_options.get_shadow_soft_size()
-        bpy.data.lamps["Sun"].shadow_ray_samples = self.__blender_options.get_shadow_ray_samples()
-        bpy.data.lamps["Sun"].use_specular = self.__blender_options.get_use_specular()
-        bpy.data.lamps["Sun"].energy = self.__blender_options.get_light_energy()
+        bpy.data.lamps["MySun"].shadow_method = self.__blender_options.get_shadow_method()
+        bpy.data.lamps["MySun"].shadow_soft_size = self.__blender_options.get_shadow_soft_size()
+        bpy.data.lamps["MySun"].shadow_ray_samples = self.__blender_options.get_shadow_ray_samples()
+        bpy.data.lamps["MySun"].use_specular = self.__blender_options.get_use_specular()
+        bpy.data.lamps["MySun"].energy = self.__blender_options.get_light_energy()
 
     def set_cycles_options(self):
         # Set Render Engine to Cycles
@@ -440,7 +416,7 @@ class BuildScene:
         bpy.data.scenes["Scene"].cycles.use_camera_cull = True
 
         #lighting
-        bpy.data.lamps["Sun"].shadow_soft_size = self.__blender_options.get_shadow_soft_size()
-        bpy.data.lamps["Sun"].cycles.max_bounces = 16
-        bpy.data.lamps["Sun"].cycles.cast_shadow = False
-        bpy.data.lamps["Sun"].cycles.use_multiple_importance_sampling = False
+        bpy.data.lamps["MySun"].shadow_soft_size = self.__blender_options.get_shadow_soft_size()
+        bpy.data.lamps["MySun"].cycles.max_bounces = 16
+        bpy.data.lamps["MySun"].cycles.cast_shadow = False
+        bpy.data.lamps["MySun"].cycles.use_multiple_importance_sampling = False

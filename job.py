@@ -2,11 +2,10 @@ from jpl_conf import FilePaths
 from jpl_conf import Blender_Config_Options
 from create_blend import Importer
 from create_scene import BuildScene
-#from render_scene import RenderStills
-from animate_scene import AnimateScene
 from osgeo import gdal, osr
 from CzmlParser import CZML_Parser
 import sys
+import math
 
 # Profiling imports to test timing
 import time
@@ -20,13 +19,13 @@ def timing(f):
         print('%s function took %0.3f ms' % (f.__name__, (time2 - time1)*1000.0))
     return wrap
 
+
 def get_meta_data(path):
-    bag = gdal.Open(path.get_import_file_name())  # replace it with your file
-    # raster is projected
+    bag = gdal.Open(path.get_import_file_name())
     bag_gtrn = bag.GetGeoTransform()
     bag_proj = bag.GetProjectionRef()
     bag_srs = osr.SpatialReference(bag_proj)
-    geo_srs = bag_srs.CloneGeogCS()  # new srs obj to go from x,y -> φ,λ
+    geo_srs = bag_srs.CloneGeogCS()
     transform = osr.CoordinateTransformation(bag_srs, geo_srs)
 
     bag_bbox_cells = (
@@ -47,126 +46,119 @@ def get_meta_data(path):
         pix_pts.append([x2, y2])
         xy_pts.append([x, y])
 
-    #print("index 0: " + str(xy_pts))
-    #print("index 1: " + str(pix_pts))
-    #print("index 2: " + str(geo_pts))
-
     return [xy_pts, pix_pts, geo_pts]
 
+
+def generate_sun(sun):
+    uv = unitize(sun)
+    return zenith(uv), azimuth(uv)
+
+
+def unitize(v):
+    r = math.sqrt((v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]))
+    return v[0] / r, v[1] / r, v[2] / r
+
+
+def azimuth(u):
+    return math.atan2(u[1], u[0])
+
+
+def zenith(u):
+    return math.atan2(u[0], u[2])
+
+
 @timing
-def do_import(in_obj, blend_config, user_points):
+def do_import(in_obj, blend_config):
     in_obj.clear_blend_file()
     objName = "terrain"
     blend_config.set_terrain(objName)
 
     # Importing Functions.
-    # Supports IMG, Collada, and OBJ
     #in_obj.import_hirise_img("BIN2")
-    in_obj.import_hirise_img("BIN6", 0.01)
-    #in_obj.import_hirise_img("BIN12-FAST", 0.01)
+    #in_obj.import_hirise_img("BIN6", 0.01)
+    in_obj.import_hirise_img("BIN12-FAST", 0.01)
 
     in_obj.set_material_option()
-    #in_obj.split_terrain_by_points(user_points, 6, objName)
-    #in_obj.initialize_lod(objName)
-    #in_obj.split_terrain(6, objName)
     in_obj.select_object()
 
+
 @timing
-def do_create_scene(scene):
+def do_create_scene(scene, split):
     scene.camera_path()
     scene.make_camera()
-    #scene.link_camera_path()
     scene.create_lamp()
     scene.key_frame_camera()
-
-    #scene.path_camera()
-    #scene.create_camera_path()
-    #scene.create_camera()
-    #scene.bind_camera_path()
-
     scene.set_camera_orientation()
-
-    #scene.set_render_options()
-    #scene.set_lighting_options()
     scene.set_cycles_options()
+    scene.set_end_frame()
+    split.split_terrain(2, "terrain")
+
 
 @timing
-def do_render(path, split):
-    f = open("/home/chrisomlor/MovieDemo/hadoop/input/input.txt",'w')
-    frame_count = path.get_frame_count()
+def do_render(path, config, split, rid):
+    input = path.get_cur_working_dir() + "/hadoop/input/"
+    #input = path.get_cur_working_dir() + "/hadoop/input/input.txt"
+    #f = open(input, 'w')
+    frame_count = config.get_end_frame()
+    frame_step = config.get_end_frame() if path.get_render_count() > config.get_end_frame() else path.get_render_count()
     start = end = 1
     job_num = 0
-    while end <= frame_count:
-        end = start + 59
-        split.create_job(start, end, path.get_abs_path_project(), job_num, 'terrain', path.get_blend_file())
-        f.write(str(start) + " " + str(end) + " ")
-        if end == frame_count:
-            end = 999
+    while end < frame_count:
+        f = open(input + "input_" + str(job_num) + ".txt", 'w')
+        end = start + frame_step
+        job_file = split.create_job(start, end, path.get_cur_working_dir() + "/assets/", job_num, 'terrain', path.get_blend_file())
+        print("JOB FILE NAME: " + str(job_file))
+        f.write(str(start) + " " + str(end) + " " + str(rid) + " " + str(job_file) + " ")
+
         start = end + 1
         job_num += 1
-    f.close()
+        f.close()
 
-@timing
-def do_animate(animater):
-    animater.animate()
 
 def main(json=None):
-    # Testing data for camera positioning
-    #points = [[0, 27.83998, 28.16131, 200.0000], [10, 27.9000, 28.0000, 5000.0000], [20, 27.99168, 27.85431, 750]]
-    #cam = [[11.415, -10.087, -59.376, -111.546], [90.0, -25.0, -65.0, -100.0], [90.0, -25, -65, -100]]
+    print(str(sys.argv))
 
-    #points = [[0, 27.9000, 28.16131, 1000], [3, 27.9000, 28.00, 1000], [6, 27.9000, 27.85431, 1000]]
-    #cam = [[0, 11.415, -10.087, -59.376, -111.546], [0, 11.415, -10.087, -59.376, -111.546], [0, 11.415, -10.087, -59.376, -111.546]]
-    light_ori = [[0, 1.000, -0.300, 0.000, 0.000], [30, 0.750, 0.640, 0.000, 0.000]]
-    light_pos = [[0, -8.000, -123.000, 75.000], [60, -8.000, -123.000, 75.000]]
-
-    #print(sys.argv)
-    #print("argv: " + sys.argv[5])
-    #print("------------------------------------------------------------------------------------------")
+    # Parse JSON input into point, angle and sun_data
     json_parse = CZML_Parser(sys.argv[5])
-    #json_parse = CZML_Parser(json)
-
     point, angle = json_parse.blenderCamera()
     sun_data = json_parse.sundata()
 
+    # Convert Sun Data to usable points of azimuth and zenith
+    sun_pos = unitize(sun_data)
+    sun_ori = generate_sun(sun_data)
 
-
-    #print(point)
-    #print(angle)
-    #print("-----Sun Data-----")
-    #print(sun_data)
-
-    out_file = 'my_test.blend'
-    in_file = 'my_image.IMG'
-    text_file = 'texture_sb.jpg'
+    # Set Filename variables
+    out_file = sys.argv[7]
+    in_file = sys.argv[9]
+    if sys.argv[8] == "None":
+        text_file = None
+    else:
+        text_file = sys.argv[8]
 
     # Create Class Objects
     file_path = FilePaths(in_file, out_file, text_file)
     blend_config = Blender_Config_Options()
     meta_data = get_meta_data(file_path)
     my_importer = Importer(file_path, blend_config)
-    my_scene = BuildScene(blend_config, file_path, meta_data, [point, angle, light_ori, light_pos])
+    my_scene = BuildScene(blend_config, file_path, meta_data, [point, angle, sun_ori, sun_pos])
 
+    # Set the current working directory for this job
+    file_path.set_cur_working_dir(sys.argv[6])
+
+    # Convert Camera locations to blender coordinates
     user_points_converted = []
     for pt in point:
         convert = my_scene.geo_2_pix(float(pt[1]), float(pt[2]), float(pt[3]))
         user_points_converted.append(convert)
 
     # Execute Class Functions
-    do_import(my_importer, blend_config, user_points_converted)
-    do_create_scene(my_scene)
+    do_import(my_importer, blend_config)
+    do_create_scene(my_scene, my_importer)
 
     # Save all the options into a blend file
     my_importer.save_scene(out_file)
 
-    do_render(file_path, my_importer)
-
-    #out_file = 'my_test.blend'
-    #in_file = 'my_image.IMG'
-    #text_file = 'texture_sb.jpg'
-    #file_path = FilePaths(in_file, out_file, text_file)
-    #animater = AnimateScene(file_path)
-    #do_animate(animater)
+    do_render(file_path, blend_config, my_importer, out_file[0:out_file.find('.')])
 
 if __name__ == "__main__":
     main()

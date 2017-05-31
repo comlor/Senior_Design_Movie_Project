@@ -5,7 +5,6 @@ from jpl_conf import FilePaths
 import math
 from subprocess import call
 
-#print("TESTING THE REdUCER RENDERING FILE_________________________________________________________________________")
 
 blender_options = Blender_Config_Options()
 # Set Render Engine to Cycles
@@ -47,28 +46,29 @@ bpy.data.scenes["Scene"].cycles.use_camera_cull = True
 # bpy.data.scenes["terrain"].cycles.use_camera_cull = True
 
 
-bpy.data.lamps["Sun"].shadow_soft_size = blender_options.get_shadow_soft_size()
-bpy.data.lamps["Sun"].cycles.max_bounces = 16
-bpy.data.lamps["Sun"].cycles.cast_shadow = False
-bpy.data.lamps["Sun"].cycles.use_multiple_importance_sampling = False
+bpy.data.lamps["MySun"].shadow_soft_size = blender_options.get_shadow_soft_size()
+bpy.data.lamps["MySun"].cycles.max_bounces = 16
+bpy.data.lamps["MySun"].cycles.cast_shadow = False
+bpy.data.lamps["MySun"].cycles.use_multiple_importance_sampling = False
 
-#print("SET OPTIONS COMPLETE")
-#print(sys.argv)
+print("System Args: ")
+print(str(sys.argv))
 
-input = sys.argv[-2:]
-#print(input)
-start, end = input[0], input[1]
-#print("start: " + str(start))
-#print("end: " + str(end))
+input = sys.argv[-3:]
 
-file_path = FilePaths('mytest.img', 'my_test.blend', 'texture.jpg')
+print("INPUT: ____ : " + str(input))
+
+start, end, rid = input[0], input[1], input[2]
+
+file_path = FilePaths()
 
 bpy.context.scene.camera = bpy.data.objects['MyCamera']
 # Get the scene context to render
 scene = bpy.context.scene
 
 # Directory path to store rendered frames
-fp = file_path.get_abs_path_temp()
+fp = file_path.get_job_dir() + str(rid) + "/temp/"
+print(str(fp))
 
 # Define render file format
 scene.render.image_settings.file_format = 'PNG'  # set output format to .png

@@ -1,9 +1,11 @@
 import os
-import bpy
+#import bpy
 
 class FilePaths:
+    # Working Directory of current job.  Set dynamically by job.py
+    cur_working_dir = ""
 
-    def __init__(self, import_file, blend_file, texture_file):
+    def __init__(self, import_file=None, blend_file=None, texture_file=None):
         # File Name to import
         self.__file_name = import_file
 
@@ -13,16 +15,36 @@ class FilePaths:
         # File Name of Texture Image to use
         self.__texture_name = texture_file
 
-        # Absolute File Path to project files
+        # Server Location to store job related files
+        self.__job_dir = "/home/chrisomlor/MovieDemo/jobs/"
+
+        # Absolute File Path to project files.  This will be directory on server where to find
+        # all the python files such as this file.
         self.__abs_project_dir = "/home/chrisomlor/MovieDemo/"
 
-        # Absolute File Path to directory containing assets
-        self.__abs_assets_dir = "/home/chrisomlor/MovieDemo/Assets/"
+        # Absolute File Path to directory containing assets.
+        # This should point to directory where all DTM files located
+        self.__img_dir = "/home/chrisomlor/MovieDemo/Assets/"
 
-        # Absolute File Path to directory to save rendered stills to
-        # This is a temp directory and contents will be deleted after job completion
-        # to maintain disk space
-        self.__abs_temp_dir = "/home/chrisomlor/MovieDemo/temp/"
+        # Absolute file path to directory containing texture file images
+        self.__texture_dir = "/home/chrisomlor/MovieDemo/Assets/"
+
+        # Hadoop Executable, if in system path just change to hadoop
+        self.__hadoop_exec = "/usr/local/hadoop/bin/hadoop"
+
+        # Blender Exececutable, if in system path just type blender
+        self.__blender_exec = "/usr/lib/blender/blender"
+
+        # Hadoop mapreduce streaming jar
+        self.__hadoop_streaming = "/usr/local/hadoop/share/hadoop/tools/lib/hadoop-streaming-2.8.0.jar"
+
+        # Output directory: where to save the final video rendered
+        self.__final_output_dir = "/home/chrisomlor/MovieDemo/jobs/"
+
+        # Static value how to divide splitting of jobs.  This value will create splits on the number
+        # of frames specified.  If the value is set at 60, this will create render jobs with 60 frames
+        # each
+        self.__render_frame_count = 60
 
         self.__IMG_binmode = "BIN12-FAST"
         self.__IMG_scale = 0.01
@@ -30,15 +52,40 @@ class FilePaths:
     ######################################################
     ###### Getters and Setters for Member Variables ######
     ######################################################
+    def get_render_count(self):
+        return self.__render_frame_count
+
+    def get_cur_working_dir(self):
+        return self.cur_working_dir
+
+    def set_cur_working_dir(self, cur_dir):
+        self.cur_working_dir = cur_dir
+
+    def get_hadoop_streaming(self):
+        return self.__hadoop_streaming
+
+    def get_final_output_dir(self):
+        return self.__final_output_dir
+
+    def get_job_dir(self):
+        return self.__job_dir
+
+    def get_blender_exec(self):
+        return self.__blender_exec
+
+    def get_hadoop_exec(self):
+        return self.__hadoop_exec
+
     def get_blend_file(self):
-        return os.path.join(self.__abs_assets_dir, self.__blend_file_name)
+        return self.__blend_file_name
+        #return os.path.join(self.__cur_working_dir + "/assets/", self.__blend_file_name)
 
     def get_import_file_name(self):
-        return os.path.join(self.__abs_assets_dir, self.__file_name)
+        return os.path.join(self.__img_dir, self.__file_name)
 
     def get_texture_file(self):
         if self.__texture_name is not None:
-            return os.path.join(self.__abs_assets_dir, self.__texture_name)
+            return os.path.join(self.__texture_dir, self.__texture_name)
         else:
             return None
 
@@ -47,24 +94,6 @@ class FilePaths:
 
     def get_abs_path_assets(self):
         return self.__abs_assets_dir
-
-    def get_abs_path_temp(self):
-        return self.__abs_temp_dir
-
-    def set_abs_path_temp(self, temp_path):
-        self.__abs_temp_dir = temp_path
-
-    def set_abs_path_assets(self, assets_path):
-        self.__abs_assets_dir = assets_path
-
-    def set_abs_path_project(self, project_path):
-        self.__abs_project_dir = project_path
-
-    def set_blend_file_name(self, blend_file_name):
-        self.__blend_file_name = blend_file_name
-
-    def set_import_file_name(self, import_file_name):
-        self.__file_name = import_file_name
 
     def get_blend_file_name(self):
         return self.__blend_file_name
@@ -75,15 +104,13 @@ class FilePaths:
     def get_IMG_binmode(self):
         return self.__IMG_binmode
 
-    def get_frame_count(self):
-        return bpy.data.scenes["Scene"].frame_end
-
 
 class Blender_Config_Options:
+    end_frame = 100
 
     def __init__(self):
         # Object Variables
-        self.__scene = bpy.context.scene
+        # self.__scene = bpy.context.scene
         self.__terrain = ""
 
         # Global Configuration Options
@@ -92,7 +119,6 @@ class Blender_Config_Options:
 
         # Camera Configurations Options
         self.__camera_preset = 'Nikon D3100'
-        self.__end_frame = 100
         self.__fps = 24
 
         # Material Options
@@ -150,11 +176,6 @@ class Blender_Config_Options:
 
     def get_render_engine(self):
         return self.__render_engine
-
-
-
-
-
 
 
     ###############################################
@@ -345,10 +366,10 @@ class Blender_Config_Options:
     ###########   Animation Options   #############
     ###############################################
     def set_end_frame(self, end_frame):
-        self.__end_frame = end_frame
+        self.end_frame = end_frame
 
     def get_end_frame(self):
-        return self.__end_frame
+        return self.end_frame
 
     def set_fps(self, fps):
         self.__fps = fps

@@ -20,15 +20,13 @@ class AnimateScene:
         # Set output directory to save final video
         self.out_dir = output_dir
 
-        #bpy.data.scenes["Scene"].render.resolution_x = self.path.render_res_x
-        #bpy.data.scenes["Scene"].render.resolution_y = self.path.render_res_y
-        #bpy.data.scenes["Scene"].render.resolution_percentage = self.path.render_res_percent
 
     def animate(self):
         # Filter file list by valid file types.
         candidates = []
         c = 0
         for item in self.lst:
+            print(item)
             fileName, fileExtension = os.path.splitext(self.lst[c])
             if fileExtension == ".png":
                 candidates.append(item)
@@ -62,12 +60,12 @@ class AnimateScene:
 
         stripname = file[0].get("name")
         bpy.data.scenes["Scene"].frame_end = n
-        bpy.data.scenes["Scene"].render.image_settings.file_format = 'FFMPEG'
+        bpy.data.scenes["Scene"].render.image_settings.file_format = 'H264'
         bpy.data.scenes["Scene"].render.filepath = self.out_dir
         bpy.ops.render.render(animation=True)
 
         # Diagnostic to check whether the images were loaded
-        stripname = file[0].get("name");
+        stripname = file[0].get("name")
         print(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname])
         print(dir(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname]))
 
