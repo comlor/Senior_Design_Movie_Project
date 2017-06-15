@@ -20,6 +20,7 @@ class Importer:
     # Delete all default objects from blender so we have an
     # empty scene to work with.
     def clear_blend_file(self):
+        self.__file_path.log_events("Delete All Default Blender Objects\n")
         # Delete all default objects from scene
         bpy.ops.object.select_all(action='SELECT')
         bpy.ops.object.delete(use_global=True)
@@ -29,19 +30,22 @@ class Importer:
         # Enable the HiRISE IMG Import Addon
         #addon_utils.enable("io_convert_image_to_mesh_img")
 
-        #print(self.__file_path.get_blend_file())
         # Execute the addon to import the IMG file,
         # #additional options available for resolution and quality
+
+        self.__file_path.log_events("Import DTM\n")
         bpy.ops.import_shape.img(filepath=self.__file_path.get_import_file_name(),
                                  bin_mode=bin_mode, scale=scale)
 
         # Rename the imported object to terrain so we know
         # the name in every scene created when the job split occurs
+        self.__file_path.log_events("Override Terrain Name to Terrain\n")
         for obj in bpy.context.selected_objects:
             obj.name = "terrain"
             self.__blender_config.set_terrain(obj.name)
             self.__imported_obj = obj
 
+        self.__file_path.log_events("Flip Normals due to bug in importer\n")
         ob = self.returnObjectByName("terrain")
         ob.select = True
         bpy.context.scene.objects.active = ob
@@ -50,6 +54,7 @@ class Importer:
         bpy.ops.object.mode_set(mode='OBJECT')
 
         # Add material and texture to the DTM
+        self.__file_path.log_events("Add Textures\n")
         self.__add_texture()
 
     # Creates a material and texture for the imported HiRISE IMG
@@ -87,14 +92,15 @@ class Importer:
         textures = mat.texture_slots
 
         texture_file = self.__file_path.get_texture_file()
+        self.__file_path.log_events("Texture File: " + str(texture_file) + "\n")
 
         if texture_file is not None:
+            self.__file_path.log_events("Texture File Selected\n")
             img = ''
             for tex in textures:
                 if tex:
                     if tex.texture.type == 'IMAGE':
                         img = tex.texture.image
-                        print(img.name)
 
             if not img:
                 img = bpy.data.images.load(texture_file)
@@ -107,32 +113,17 @@ class Importer:
             text_coord = node_tree.nodes.new('ShaderNodeTexCoord')
             links.new(text_coord.outputs['Generated'], shtext.inputs['Vector'])
         else:
-            print("NO TEXTURE IMAGE --> SET COLOR")
+            self.__file_path.log_events("NO TEXTURE IMAGE --> SET COLOR\n")
             color = [0.800, 0.300, 0.017, 1.0]
             shader.inputs["Color"].default_value = color
-
-    # Deselects the object by name that was just imported
-    # This needs to happen as it is selected by default and will
-    # cause problems with camera animation if left selected.
-    def select_object(self):
-        bpy.ops.object.select_all(action='DESELECT')
 
     # Save the blend file with the new imported mesh
     def save_scene(self, file_name):
         save_loc = self.__file_path.get_cur_working_dir() + "/assets/"
         save_file = self.__file_path.get_blend_file()
         save = save_loc + save_file
-        print(str(save))
+        self.__file_path.log_events("Saving Blender File: " + save + "\n")
         bpy.ops.wm.save_as_mainfile(filepath=save)
-
-    def returnObjectByName(self, passedName=""):
-        r = None
-        obs = bpy.data.objects
-        for ob in obs:
-            if ob.name == passedName:
-                r = ob
-        #print(r.name)
-        return r
 
     def apply_mask(self, terrain=""):
         for ob in bpy.context.scene.objects:
@@ -162,18 +153,16 @@ class Importer:
         dimension = C.object.dimensions
 
         bbox_corners = [C.object.matrix_world * Vector(corner) for corner in C.object.bound_box]
-        print(bbox_corners)
 
-        x_val = 0;
-        y_val = 0;
-        z_val = 0;
+        x_val = 0
+        y_val = 0
+        z_val = 0
 
         # Get the correct bounds to account for negative since dimenions only push positives
         for vector_c in bbox_corners:
             v_x = int(vector_c[0])
             v_y = int(vector_c[1])
             v_z = int(vector_c[2])
-            print(str(v_x) + " " + str(v_y) + " " + str(v_z))
             if int(dimension[0]) == abs(v_x):
                 x_val = v_x
             if int(dimension[1]) == abs(v_y):
@@ -186,11 +175,6 @@ class Importer:
         splity = int(y_val / split_count) == 0 and 1 or int(y_val / split_count)
         splitz = int(z_val / split_count) == 0 and 1 or int(z_val / split_count)
 
-        print(location)
-        print(dimension)
-        print("Real Dimensions:X:" + str(x_val) + ",Y:" + str(y_val) + ",Z:" + str(
-            z_val) + " " + "split_units:X:" + str(splitx) + ",Y:" + str(splity) + ",Z:" + str(splitz))
-        # print(splitx + " " + splity)
         for i in range(int(location[0]), x_val, splitx):
             ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(i, 0, 0),
                                          plane_no=(-1, 0, 0))
@@ -214,7 +198,6 @@ class Importer:
         for ob in obs:
             if ob.name == passedName:
                 r = ob
-        print(r.name)
         return r
 
     def select_object(self):
@@ -238,7 +221,6 @@ class Importer:
                         zlist.append(ob.name)
                         # dm = ob.modifier_remove('DECIMATE')
         zlist = list(set(zlist))
-        print(zlist)
         for ob in bpy.context.scene.objects:
             if ob.type == 'MESH' and ob.name.startswith(terrain):
                 ob.select = True
@@ -272,7 +254,6 @@ class Importer:
                         zlist.append(ob.name)
                         # dm = ob.modifier_remove('DECIMATE')
         zlist = list(set(zlist))
-        # print(zlist)
         return zlist
 
     def testInView(self, coord, tolerance):
@@ -306,16 +287,13 @@ class Importer:
     def get_Visible(self, start_frame=0, end_frame=0, terrain=""):
         s = []
         scene = bpy.context.scene
-        print("Debug>" + str(start_frame) + " " + str(end_frame))
         for i in range(start_frame, end_frame):
             if i % 10 is 0:
-                print("Debug>" + str(i))
                 scene.frame_set(i)
                 current = self.is_visible(terrain)
                 s = s + current
                 end_frame += 1;
                 s = list(set(s))
-                print("Visible Chunks: " + str(s) + "\nVisible Chunk Count:" + str(len(s)))
         return list(set(s))
 
     def set_cycles_options(self):
@@ -372,7 +350,6 @@ class Importer:
         save_file += str(job_num)
         save_file += '.blend'
         save = file_path + save_file
-        print("SAVE FILE: ", str(save))
         bpy.ops.wm.save_as_mainfile(filepath=save)
         return save_file
 
@@ -393,14 +370,11 @@ class Importer:
         for ob in bpy.context.scene.objects:
             if ob.type == 'MESH' and ob.name.startswith(terrain):
                 unused.append(ob.name)
-        print("All Terrains: " + str(unused) + "\nVisible terrains:" + str(terrains))
         unused = list(set(unused) - set(terrains))
-        print(unused)
         for ob in bpy.context.scene.objects:
             for i, val in enumerate(unused):
                 if ob.type == 'MESH' and ob.name.startswith(terrain):
                     if ob.name == val:
-                        print(ob.name)
                         ob.select = True
                         bpy.ops.object.delete()
                         self.select_object()

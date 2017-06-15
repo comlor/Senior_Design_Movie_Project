@@ -66,6 +66,7 @@ class Spice():
 
         list = temp[0], temp[1], temp[2]
 
+        FilePaths().log_events("Sun Data - Sphere to Cart: " + str(list) + "\n")
         return list
 
 
@@ -84,8 +85,6 @@ class Spice():
         et2 = et1.replace('Z', '')
         et3 = spy.str2et(et2)
 
-        # print(et3)
-
         # get the velocity of planet
         templist = spy.spkezr(self.planet, et3, frame, abcorr, target)
         velocity = templist[0][3], templist[0][4], templist[0][5]
@@ -95,6 +94,7 @@ class Spice():
 
         temp0 = spy.spkcpo(target, et3, frame, refloc, abcorr, xyz, self.planet, frame)
         sunPos = temp0[0][0], temp0[0][1], temp0[0][2]
+        FilePaths().log_events("Sun Data - Sun Position: " + str(sunPos) + "\n")
         return json.dumps(sunPos)
 
 
@@ -106,8 +106,6 @@ def SunData():
     et = request.params.et
     planet = request.params.planet
 
-    #print(alt)
-
     lon = str(lon)
     lat = str(lat)
     alt = str(alt)
@@ -117,9 +115,9 @@ def SunData():
 
     sun = Spice(lon, lat, alt, et, planet)
 
-    #URL I tested it on
-    #http://localhost:8281/SunData?lon=29p001&lat=26p2121&alt=52p999&et=2012-08-04T10:00:00Z&planet=Mars
     dataString = sun.sunData()
+    FilePaths().log_events("Sun Data - Data String: " + str(dataString) + "\n")
+
     return dataString
 
 
@@ -143,30 +141,36 @@ def getData():
 @get('/temp')
 def doTemp():
     randomid = key_gen(20)
-    print(randomid)
     check_availablity(randomid, "fake@gmail.com")
 
 
 def check_availablity(randomid, email, json_text):
+    FilePaths().log_events("\n\n****************JOB BEGIN " + randomid + "********************\n\n")
     entity = posts.find_one({'vid': randomid})
-    print(entity)
     if not entity:
         # TODO: EDIT PATH ON LINUX SYSTEM
         mypath = FilePaths().get_job_dir() + str(randomid)
+        FilePaths().log_events("Current Job Path: " + mypath + "\n")
         if not os.path.isdir(mypath):
+            FilePaths().log_events("Creating Directory: " + mypath + "\n")
             os.makedirs(mypath)
         try:
-            print("HI IM HERE")
             output_path = FilePaths().get_final_output_dir() + randomid
+            FilePaths().log_events("Ouput Directory: " + output_path + "\n")
             if not os.path.isdir(output_path):
+                FilePaths().log_events("Creating Output Directory: " + output_path + "\n")
                 os.makedirs(output_path)
 
+            FilePaths().log_events("Insert Database Record: " + randomid + ", Email: " + email + ", JobPath: " +
+                                   mypath + ", OutputPath: " + output_path + "\n")
             posts.insert_one({'vid': randomid, 'email': email, 'path': mypath, 'output': output_path})
 
+            FilePaths().log_events("Save JSON to File in job directory: " + mypath + "/liveJson.JSON\n")
             with open(mypath + "/liveJson.JSON", 'w') as outfile:
                 json.dump(json_text, outfile)
 
             server_dir = FilePaths().get_abs_path_project()
+            FilePaths().log_events("Server Directory: " + server_dir + "\n")
 
             alt = "python3 "
             alt += server_dir
@@ -179,6 +183,7 @@ def check_availablity(randomid, email, json_text):
             alt += " "
             alt += randomid
 
+            FilePaths().log_events("Execute Command: " + alt + "\n")
             sub = subprocess.Popen([alt], shell=True)
 
         except Exception as e:
@@ -192,16 +197,17 @@ def check_availablity(randomid, email, json_text):
 def sendEmail():
     postdata = str(request.body.read())
     postdata = postdata[2:-1]
-    print(postdata)
     entity = posts.find_one({'vid': postdata})
-    print(entity)
     if not entity:
         abort(404, "No such video")
+        FilePaths().log_events("VIDEO NOT FOUND\n")
     else:
+        FilePaths().log_events("Preparing Email Link --> ")
         temp = json.dumps(entity, sort_keys=True, indent=4, default=json_util.default)
         temp1 = json.loads(temp)
         to = temp1["email"]
         text = temp1["output"] + "/" + postdata + ".avi"
+        FilePaths().log_events("Video Name: " + text + "\n")
         sendMail('testaddress4454543@gmail.com', to, 'Your Movie from MarsTrek has completed!', text, 'smtp.gmail.com')
 
 
@@ -213,8 +219,11 @@ def sendMail(FROM, TO, SUBJECT, TEXT, SERVER):
     server = smtplib.SMTP(SERVER)
     server.starttls()
     #login paramters -> username,password
+    FilePaths().log_events("Send Email --> ")
     server.login('testaddress4454543', 'Planetaryflyovergroup')
     server.sendmail(FROM, TO, msg.as_string())
+    FilePaths().log_events("Email Sent to: " + TO + "\n")
     server.quit()
+    FilePaths().log_events("\n\n****************JOB COMPLETE " + TEXT + "********************\n\n")
 
 run(host='localhost', port=8281, debug=True)

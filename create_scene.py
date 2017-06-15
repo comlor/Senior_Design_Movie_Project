@@ -47,6 +47,7 @@ class BuildScene:
     # Create camera path using vertices received from user and using linear interpolation to fille in the
     # path between the points.
     def camera_path(self):
+        self.__file_path.log_events("Create Camera Path\n")
         # Get user selected point into list converted to pixel coordinates in blender
         verts = []
         for pt in self.__user_points:
@@ -74,6 +75,7 @@ class BuildScene:
     # Create a camera object and place on scene in the starting location of the animation based on user
     # defined points
     def make_camera(self):
+        self.__file_path.log_events("Create Camera Object\n")
         bpy.ops.object.select_all(action='DESELECT')
 
         cxt = [x for x in bpy.context.screen.areas if x.type == 'VIEW_3D']
@@ -129,23 +131,10 @@ class BuildScene:
         self.__camera_object.constraints["Follow Path"].target = self.__camera_path
         self.__camera_object.constraints["Follow Path"].forward_axis = "FORWARD_Z"
 
-    # Make the camera object a chile of the camera path object so the follow path constraint
-    # makes camera follow along the path when animated.
-    #def link_camera_path(self):
-    #    #self.__scene.objects.link(self.__camera_path)
-    #    self.__scene.objects.active = self.__camera_path
-    #    self.__camera_path.select = True
-
-    #    self.__scene.objects.link(self.__camera_object)
-
-    #   start_loc = self.geo_2_pix(float(self.__user_points[0][1]), float(self.__user_points[0][2]), float(self.__user_points[0][3]))
-    #    self.__camera_object.location = start_loc
-
-    #    self.__camera_object.select = True
-
     # Using key frames and linear interpolation to set the timing between each user defined point
     # of the camera path
     def key_frame_camera(self):
+        self.__file_path.log_events("Key Frame Camera Object\n")
         # Convert each user selected value to pixel coordinates in blender as a new list
         verts = []
         for pt in self.__user_points:
@@ -179,6 +168,7 @@ class BuildScene:
     # Sets the end_frame inside blender and saves information in blender configuration
     # class variable for rendering tasks to use
     def set_end_frame(self):
+        self.__file_path.log_events("Set the End Frame Data\n")
         scene = bpy.context.scene
         end_frame = scene.frame_end
         # Update the end_frame variable in jpl_conf.py for use in other classes
@@ -191,6 +181,7 @@ class BuildScene:
     # Convert GPS Lon/Lat to pixel coordinates in blender
     # Altitude needs work yet
     def geo_2_pix(self, x, y, z):
+        self.__file_path.log_events("Convert GPS Coordinate to Pixel Coordinates\n")
         # Retrience the scale of the imported mesh(default is 0.01)
         img_scale = self.__file_path.get_IMG_scale()
 
@@ -231,6 +222,7 @@ class BuildScene:
     # Creates a sun lamp.
     # Not scientifically accurate yet
     def create_lamp(self):
+        self.__file_path.log_events("Create Sun Object\n")
         bpy.ops.object.select_all(action='DESELECT')
 
         # Create Empty for setting sun default orientation to north azimuth = 0 deg, zenith = 0 deg parallel to surface
@@ -253,9 +245,7 @@ class BuildScene:
 
         my_sun.lock_rotation[2] = True
         my_sun.rotation_mode = 'XZY'
-        print("Sun X_rot: " + str(self.__light_orientation[0] * (180 / math.pi) * -1))
-        print("Sun Y_rot: " + str(self.__light_orientation[1] * (180 / math.pi) + 180))
-        print("Sun Z_rot: " + str(0))
+
         my_sun.rotation_euler = (self.__light_orientation[0] * -1, self.__light_orientation[1] + math.pi, 0)
         my_sun.location = (0, 0, 0)
 
@@ -267,10 +257,12 @@ class BuildScene:
     # transition point and interpolating the rotation values to create a smooth rotational transition of
     # the cameras orientation
     def set_camera_orientation(self):
+        self.__file_path.log_events("Set Camera Orientation\n")
         self.key_frame_pitch()
         self.key_frame_roll()
 
     def key_frame_roll(self):
+        self.__file_path.log_events("Key Frame Camera Roll\n")
         scene = bpy.context.scene
         scene.objects.active = bpy.data.objects['MyCamera']
 
@@ -287,8 +279,6 @@ class BuildScene:
         time_offsets = []
         for item in self.__user_points:
             time_offsets.append(float(item[0]))
-        print("************************************************************")
-        print(time_offsets)
 
         # For every time offset we create a key frame on the camera object 10 frames before and after each offset
         # so that the camera makes a smooth transition to the new rotation values.
@@ -303,6 +293,7 @@ class BuildScene:
 
 
     def key_frame_pitch(self):
+        self.__file_path.log_events("Key Frame Camera Pitch\n")
         scene = bpy.context.scene
         scene.objects.active = bpy.data.objects['pitch_heading']
 

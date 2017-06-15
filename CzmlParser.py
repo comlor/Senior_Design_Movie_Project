@@ -113,7 +113,7 @@ class CZML_Parser:
         '''
         json_data = self.open_file()
 
-        email =  json_data[2]["email"]
+        email = json_data[2]["email"]
         return email
     
     def sundata(self):
@@ -129,12 +129,19 @@ class CZML_Parser:
         sun =  json_data[2]["sunData"]#need to find exact key names
     
         return sun
+
+    def render_quality(self):
+        json_data = self.open_file()
+        quality = json_data[2]["quality"]
+        return quality
+
+    def texture_file(self):
+        json_data = self.open_file()
+        texture = json_data[2]["textureImage"]
+        return texture
     
 def main():
     json = CZML_Parser(file)
-    
-    print(json.sundata())
-    print(json.email())
 
 if __name__ == '__main__':
      main()

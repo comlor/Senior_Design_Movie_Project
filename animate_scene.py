@@ -26,17 +26,17 @@ class AnimateScene:
         candidates = []
         c = 0
         for item in self.lst:
-            print(item)
             fileName, fileExtension = os.path.splitext(self.lst[c])
             if fileExtension == ".png":
                 candidates.append(item)
             c = + 1
 
+        FilePaths().log_events("Number of Images: " + str(len(candidates)))
+
         candidates.sort()
 
         file = [{"name": i} for i in candidates]
         n = len(file)
-        print(n)
 
         def find_sequencer_area():
             screens = [bpy.context.screen] + list(bpy.data.screens)
@@ -66,13 +66,16 @@ class AnimateScene:
 
         # Diagnostic to check whether the images were loaded
         stripname = file[0].get("name")
-        print(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname])
-        print(dir(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname]))
+        FilePaths().log_events(str(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname]))
+        FilePaths().log_events(str(dir(bpy.data.scenes["Scene"].sequence_editor.sequences[stripname])))
+
 
 def main():
-    print(sys.argv)
+    FilePaths().log_events("ANIMATE STILL IMAGES")
     image_path = sys.argv[5]
+    FilePaths().log_events("Image Path: " + image_path)
     output_path = sys.argv[6]
+    FilePaths().log_events("Output Path: " + output_path)
     animater = AnimateScene(image_path, output_path)
     animater.animate()
 

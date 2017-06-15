@@ -4,6 +4,8 @@ import os
 class FilePaths:
     # Working Directory of current job.  Set dynamically by job.py
     cur_working_dir = ""
+    IMG_binmode = "BIN12-FAST"
+    IMG_scale = 0.01
 
     def __init__(self, import_file=None, blend_file=None, texture_file=None):
         # File Name to import
@@ -41,17 +43,23 @@ class FilePaths:
         # Output directory: where to save the final video rendered
         self.__final_output_dir = "/home/chrisomlor/MovieDemo/jobs/"
 
+        # Log file location
+        self._log_file = "/home/chrisomlor/MovieDemo/jobs/movie_log.txt"
+
         # Static value how to divide splitting of jobs.  This value will create splits on the number
         # of frames specified.  If the value is set at 60, this will create render jobs with 60 frames
         # each
         self.__render_frame_count = 60
 
-        self.__IMG_binmode = "BIN12-FAST"
-        self.__IMG_scale = 0.01
 
     ######################################################
     ###### Getters and Setters for Member Variables ######
     ######################################################
+    def log_events(self, line):
+        f = open(self._log_file, "a")
+        f.write(line)
+        f.close()
+
     def get_render_count(self):
         return self.__render_frame_count
 
@@ -92,17 +100,17 @@ class FilePaths:
     def get_abs_path_project(self):
         return self.__abs_project_dir
 
-    def get_abs_path_assets(self):
-        return self.__abs_assets_dir
-
     def get_blend_file_name(self):
         return self.__blend_file_name
 
     def get_IMG_scale(self):
-        return self.__IMG_scale
+        return self.IMG_scale
 
     def get_IMG_binmode(self):
-        return self.__IMG_binmode
+        return self.IMG_binmode
+
+    def set_binmode(self, binmode):
+        self.IMG_binmode = binmode
 
 
 class Blender_Config_Options:
