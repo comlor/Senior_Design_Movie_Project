@@ -1,5 +1,6 @@
 # Code Samples from Senior Project for JPL
 
+The following python scripts are samples of code.  They are not an stand-alone software system but part of or sections of a larger system.
 
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
